@@ -28,9 +28,9 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .claude
 .paul
 scratch
-check-*.ts
-test-*.ts
-create-admin-user.ts
+/check-*.ts
+/test-*.ts
+/create-admin-user.ts
 
 # IntelliJ based IDEs
 .idea
