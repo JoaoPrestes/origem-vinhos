@@ -1,4 +1,4 @@
-import { ChromaClient, Collection } from 'chromadb';
+import { ChromaClient, type Collection } from 'chromadb';
 import type {
   RagVectorStorePort,
   VectorChunkItem,
@@ -6,14 +6,20 @@ import type {
   VectorChunkMetadata,
 } from '../ports/rag-vector-store.port';
 
+export interface ChromaVectorStoreAdapterOptions {
+  client?: ChromaClient;
+  collectionName?: string;
+  url?: string;
+}
+
 export class ChromaVectorStoreAdapter implements RagVectorStorePort {
   private client: ChromaClient;
   private collectionName: string;
   private collectionPromise: Promise<Collection> | null = null;
 
-  constructor(options?: { client?: ChromaClient; collectionName?: string }) {
+  constructor(options?: ChromaVectorStoreAdapterOptions) {
     this.client = options?.client ?? new ChromaClient({
-      path: process.env.CHROMA_URL || 'http://localhost:8000',
+      path: options?.url || process.env.CHROMA_URL || 'http://localhost:8000',
     });
     this.collectionName = options?.collectionName || 'origem_vinhos_catalog';
   }
@@ -103,7 +109,7 @@ export class ChromaVectorStoreAdapter implements RagVectorStorePort {
     return {
       ids: records.ids || [],
       metadatas: ((records.metadatas || []) as unknown) as VectorChunkMetadata[],
-      documents: records.documents || [],
+      documents: ((records.documents || []).filter((d): d is string => typeof d === 'string')) as string[],
     };
   }
 

@@ -119,6 +119,7 @@ export class ProcessCatalogOutboxUseCase {
     for (const [productId, productEvents] of eventsByProduct.entries()) {
       productEvents.sort((a, b) => b.version - a.version);
       const latestEvent = productEvents[0];
+      if (!latestEvent) continue;
       const supersededEvents = productEvents.slice(1);
 
       try {
@@ -177,15 +178,21 @@ export class ProcessCatalogOutboxUseCase {
     await lexicalIndex.deleteByProductId(event.productId);
 
     // Upsert to ChromaDB
-    await vectorStore.upsert({
-      ids: chunkEmbeddings.map((ce) => ce.chunk.id),
-      embeddings: chunkEmbeddings.map((ce) => ce.vector),
-      documents: chunkEmbeddings.map((ce) => ce.chunk.content),
-      metadatas: chunkEmbeddings.map((ce) => ({
-        ...ce.chunk.metadata,
-        version: Number(ce.chunk.metadata.version),
-      })),
-    });
+    await vectorStore.upsert(
+      chunkEmbeddings.map((ce) => ({
+        id: ce.chunk.id,
+        embedding: ce.vector,
+        document: ce.chunk.content,
+        metadata: {
+          productId: ce.chunk.metadata.productId,
+          productName: ce.chunk.metadata.productName,
+          category: ce.chunk.metadata.category,
+          chunkType: ce.chunk.metadata.chunkType,
+          version: Number(ce.chunk.metadata.version),
+          status: ce.chunk.metadata.status,
+        },
+      }))
+    );
 
     // Upsert to SQLite FTS5
     await lexicalIndex.upsertChunks(

@@ -92,6 +92,10 @@ export class BunSqliteFtsAdapter implements RagLexicalIndexPort {
     tx();
   }
 
+  async deleteByProductId(productId: string): Promise<void> {
+    return this.deleteProductChunks(productId);
+  }
+
   async query(searchQuery: string, limit: number = 8): Promise<LexicalQueryResult[]> {
     const sanitizedMatchQuery = this.buildMatchQuery(searchQuery);
     if (!sanitizedMatchQuery) {

@@ -5,7 +5,9 @@
   "private": true,
   "scripts": {
     "start": "bun run src/index.ts",
-    "dev": "bun --watch src/index.ts"
+    "dev": "bun --watch src/index.ts",
+    "rag:reconcile": "bun run src/cli/reconcile.ts",
+    "worker:catalog": "bun run src/workers/catalog-ingestion.worker.ts"
   },
   "devDependencies": {
     "@types/bun": "latest",
@@ -17,6 +19,8 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "@google/genai": "^2.31.0",
+    "chromadb": "^3.5.0",
     "drizzle-orm": "^0.45.2",
     "postgres": "^3.4.9",
     "react": "^19.2.7",
