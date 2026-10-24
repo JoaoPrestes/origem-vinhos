@@ -11,6 +11,7 @@ import { Favorites } from './pages/Favorites';
 import { OrderConfirmation } from './pages/OrderConfirmation';
 import { MyOrders } from './pages/MyOrders';
 import { useFavorites } from './contexts/FavoritesContext';
+import { ChatDrawer } from './components/ChatDrawer';
 
 type Page = 'catalog' | 'auth' | 'cart' | 'profile' | 'checkout' | 'favorites' | 'order-confirmation' | 'my-orders';
 
@@ -194,6 +195,13 @@ export const App: React.FC = () => {
               </div>
             </div>
           )}
+
+          {/* ── SOMMELIER VIRTUAL CHAT DRAWER (spec09 §9) ── */}
+          <ChatDrawer
+            currentUser={currentUser}
+            onAddToCartSuccess={fetchCartCount}
+            onNavigateToAuth={() => setCurrentPage('auth')}
+          />
 
           {/* ── FOOTER MODULAR ── */}
           <Footer onNavigate={(page) => setCurrentPage(page)} />
