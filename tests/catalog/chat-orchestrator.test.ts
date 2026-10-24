@@ -107,8 +107,8 @@ describe('ChatOrchestratorUseCase (spec09 §8, §10 & BDD Scenarios 3, 9, 12)', 
     });
 
     expect(response.recommendedProducts).toHaveLength(1);
-    expect(response.recommendedProducts[0].id).toBe('p1');
-    expect(response.recommendedProducts[0].stock).toBe(4);
+    expect(response.recommendedProducts[0]!.id).toBe('p1');
+    expect(response.recommendedProducts[0]!.stock).toBe(4);
   });
 
   it('Post-Generation Grounding Check: intercepts hallucinated price and restores official PG price (BDD Cenário 9)', async () => {
@@ -126,7 +126,7 @@ describe('ChatOrchestratorUseCase (spec09 §8, §10 & BDD Scenarios 3, 9, 12)', 
     expect(response.reply).toContain('179,00');
     expect(response.reply).not.toContain('50,00');
     // Mini Card is 100% sovereign from Postgres
-    expect(response.recommendedProducts[0].price).toBe(179.0);
+    expect(response.recommendedProducts[0]!.price).toBe(179.0);
   });
 
   it('Post-Generation Grounding Check: purges citedProductIds not approved by Funnel of Truth', async () => {
@@ -140,7 +140,7 @@ describe('ChatOrchestratorUseCase (spec09 §8, §10 & BDD Scenarios 3, 9, 12)', 
     });
 
     expect(response.recommendedProducts).toHaveLength(1);
-    expect(response.recommendedProducts[0].id).toBe('p1');
+    expect(response.recommendedProducts[0]!.id).toBe('p1');
   });
 
   it('Global Deadline: respects 18s timeout via AbortController (BDD Cenário 12)', async () => {

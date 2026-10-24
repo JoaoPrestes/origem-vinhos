@@ -72,8 +72,11 @@ describe('Schema Evolution & Stock Deduction (spec09 §6.1)', () => {
     const result = await useCase.execute({
       eventId: 'evt-stock-1',
       orderId: 'ord-stock-1',
+      paymentAttemptId: 'att-stock-1',
       paidAmountCents: 17900,
       currency: 'BRL',
+      cartItemIds: ['item-stock-1'],
+      occurredAt: new Date(),
     });
 
     expect(result.status).toBe('PROCESSED');

@@ -17,17 +17,19 @@ describe('ProcessCatalogOutboxUseCase (spec09 §6.1, §6.3, §10.2 & BDD Cenári
       query: mock(async () => []),
       delete: mock(async () => {}),
       deleteByProductId: mock(async () => {}),
-      getByProductId: mock(async () => ({ ids: [], metadatas: [] })),
-      getAllRecords: mock(async () => ({ ids: [], metadatas: [] })),
+      getByProductId: mock(async () => ({ ids: [], metadatas: [], documents: [] })),
+      getAllRecords: mock(async () => ({ ids: [], metadatas: [], documents: [] })),
     };
 
     mockLexicalIndex = {
       upsertChunks: mock(async () => {}),
       query: mock(async () => []),
       deleteByProductId: mock(async () => {}),
+      deleteProductChunks: mock(async () => {}),
       getVersion: mock(async () => null),
       rebuildInPlace: mock(async () => {}),
-      getAllIndexedVersions: mock(async () => new Map()),
+      getAllVersions: mock(async () => []),
+      close: mock(async () => {}),
     };
 
     mockAiGateway = {
@@ -163,7 +165,8 @@ describe('ProcessCatalogOutboxUseCase (spec09 §6.1, §6.3, §10.2 & BDD Cenári
     // Vector store already has 1 chunk at version 1
     mockVectorStore.getByProductId = mock(async () => ({
       ids: ['prod-003_identidade'],
-      metadatas: [{ productId: 'prod-003', version: 1 }],
+      metadatas: [{ productId: 'prod-003', version: 1, chunkType: 'identidade' }],
+      documents: ['Texto do vinho'],
     }));
 
     // Lexical index already has version 1
