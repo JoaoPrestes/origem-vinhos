@@ -29,6 +29,7 @@ export class GeminiAiAdapter implements RagAiGatewayPort {
   private retryBackoffMs: number;
   private openRouterFetch: typeof fetch;
   private client: GoogleGenAI;
+  private googleCooldownUntil: number = 0;
 
   constructor(options: GeminiAiAdapterOptions = {}) {
     this.apiKey = options.apiKey || process.env.GEMINI_API_KEY || '';
@@ -134,12 +135,42 @@ export class GeminiAiAdapter implements RagAiGatewayPort {
     }
   }
 
+  private isPermanentQuotaError(err: any): boolean {
+    const msg = String(err?.message || '').toLowerCase();
+    const status = String(err?.status || '');
+    return (
+      status === 'RESOURCE_EXHAUSTED' ||
+      msg.includes('resource_exhausted') ||
+      msg.includes('requests per day limit exceeded') ||
+      msg.includes('generaterequestsperdayperprojectpermodel') ||
+      msg.includes('daily limit')
+    );
+  }
+
   private async executeWithGoogleRetryAndFallback<T>(
     operationName: string,
     googleAction: () => Promise<T>,
     openRouterAction: () => Promise<T>,
     heuristicFallback: () => T
   ): Promise<T> {
+    // 1. Se o Circuit Breaker do Google estiver ativo (quota diária esgotada), vai direto ao OpenRouter
+    if (Date.now() < this.googleCooldownUntil) {
+      console.warn(
+        `[GeminiAiAdapter] Circuit breaker ativo para Google Gemini (quota esgotada). Executando diretamente via OpenRouter Free Tier (${this.openRouterModel}) para "${operationName}".`
+      );
+      if (this.openRouterApiKey) {
+        try {
+          return await openRouterAction();
+        } catch (openRouterErr: any) {
+          console.error(
+            `[GeminiAiAdapter] Falha no OpenRouter durante circuit breaker (${operationName}):`,
+            openRouterErr?.message || openRouterErr
+          );
+        }
+      }
+      return heuristicFallback();
+    }
+
     let lastGoogleError: any = null;
     const totalAttempts = 1 + this.maxGoogleRetries;
 
@@ -148,6 +179,16 @@ export class GeminiAiAdapter implements RagAiGatewayPort {
         return await googleAction();
       } catch (err: any) {
         lastGoogleError = err;
+
+        // Se for esgotamento permanente de quota diária (ex: 20 req/dia Free Tier), ativa Circuit Breaker e não queima retries redundantes
+        if (this.isPermanentQuotaError(err)) {
+          this.googleCooldownUntil = Date.now() + 15 * 60 * 1000; // 15 minutos de cooldown
+          console.warn(
+            `[GeminiAiAdapter] Quota diária do Google Gemini esgotada (RESOURCE_EXHAUSTED). Ativando Circuit Breaker e acionando OpenRouter Free Tier imediatamente sem retries redundantes para "${operationName}".`
+          );
+          break;
+        }
+
         if (attempt < totalAttempts) {
           const retryNumber = attempt;
           console.warn(
@@ -161,7 +202,7 @@ export class GeminiAiAdapter implements RagAiGatewayPort {
     }
 
     console.warn(
-      `[GeminiAiAdapter] ${this.maxGoogleRetries} retries com Google Gemini esgotados para "${operationName}". Acionando fallback para OpenRouter Free Tier (${this.openRouterModel})...`
+      `[GeminiAiAdapter] Google Gemini indisponível para "${operationName}". Acionando fallback para OpenRouter Free Tier (${this.openRouterModel})...`
     );
 
     if (this.openRouterApiKey) {
@@ -215,6 +256,21 @@ Identifique:
 4. "isGreetingOrSmallTalk": true se o usuário estiver cumprimentando ("olá", "boa noite", "tudo bem?"), agradecendo, perguntando sobre o assistente ("quem é você?", "o que você pode fazer?", "como você funciona?"), ou fazendo perguntas puramente conceituais/educativas sobre enologia sem pedir para comprar um rótulo específico da loja (ex: "o que é tanino?", "qual a diferença entre Malbec e Cabernet?", "qual a temperatura ideal de serviço?", "como degustar?"). Caso contrário, false.
 
 Consulta do usuário: "${userQuery}"`;
+
+    const clean = userQuery.trim().toLowerCase();
+    const hasGreetingWords = /(^|\b)(ol[aá]|oi|bom dia|boa tarde|boa noite|sauda[cç][oõ]es|obrigad[oa]|valeu|ol[aá] sommelier|tudo bem|tudo bom|e a[ií])(\b|$)/i.test(clean);
+    const isConceptualOrSelfQuestion = /(o que (voc[eê]|vc) (pode|sabe)?\s*(fazer|faz)|como (voc[eê]|vc) funciona|quem [eé] (voc[eê]|vc)|como funciona|ajuda|menu|o que [eé]|diferen[cç]a entre|temperatura de servi[cç]o|como degustar|para que serve)/i.test(clean);
+    const hasSpecificShoppingIntent = /(quero|comprar|pre[cç]o|quanto custa|recomende|indique|me v[eê]|garrafa|r[óo]tulo|vinho tinto|vinho branco|espumante|ros[eé]|sobremesa)/i.test(clean);
+
+    const isGreetingOrSmallTalk = (hasGreetingWords && !hasSpecificShoppingIntent) || isConceptualOrSelfQuestion;
+    if (isGreetingOrSmallTalk) {
+      return {
+        semanticQuery: '',
+        exactFilters: {},
+        requiresEditorialNotes: false,
+        isGreetingOrSmallTalk: true,
+      };
+    }
 
     const googleAction = async () => {
       const response = await this.callGenerateContent({

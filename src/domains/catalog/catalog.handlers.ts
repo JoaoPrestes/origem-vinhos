@@ -212,6 +212,7 @@ export class CatalogHandlers {
         hybridSearch,
         aiGateway,
         db: dbAdapter,
+        timeoutMs: 25000,
       });
 
       const response = await orchestrator.execute({
@@ -223,7 +224,19 @@ export class CatalogHandlers {
       return jsonResponse(response, 200);
     } catch (err: any) {
       console.error('[CatalogHandlers] Chat error:', err);
-      return jsonResponse({ error: err?.message || 'Erro ao processar mensagem do chatbot.' }, 500);
+      // Fallback de alta resiliência para nunca quebrar a interface do chat com 500
+      return jsonResponse(
+        {
+          reply:
+            'Olá! Sou o Sommelier Virtual da Origem Vinhos. Tive uma breve oscilação na consulta à nossa adega, mas estou à sua total disposição! Como posso te ajudar na escolha de um rótulo especial hoje?',
+          recommendedProducts: [],
+          metadata: {
+            requestId: 'err-resilient',
+            fallbackUsed: 'HANDLER_RESILIENT_FALLBACK',
+          },
+        },
+        200
+      );
     }
   }
 }
