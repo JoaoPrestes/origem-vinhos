@@ -112,6 +112,10 @@ export class CatalogHandlers {
         country: parsedData.country,
         harvest: parsedData.harvest,
         alcohol: parsedData.alcohol.toFixed(2),
+        stock: parsedData.stock ?? 0,
+        sensory_profile: parsedData.sensory_profile || null,
+        pairing: parsedData.pairing || null,
+        harvest_notes: parsedData.harvest_notes || null,
       });
 
       return jsonResponse({ message: 'Vinho cadastrado com sucesso.', product: newProduct }, 201);
@@ -146,6 +150,10 @@ export class CatalogHandlers {
       if (parsedData.country) updateData.country = parsedData.country;
       if (parsedData.harvest) updateData.harvest = parsedData.harvest;
       if (parsedData.alcohol !== undefined) updateData.alcohol = parsedData.alcohol.toFixed(2);
+      if (parsedData.stock !== undefined) updateData.stock = parsedData.stock;
+      if (parsedData.sensory_profile !== undefined) updateData.sensory_profile = parsedData.sensory_profile;
+      if (parsedData.pairing !== undefined) updateData.pairing = parsedData.pairing;
+      if (parsedData.harvest_notes !== undefined) updateData.harvest_notes = parsedData.harvest_notes;
 
       const updatedProduct = await catalogRepository.update(id, updateData);
       return jsonResponse({ message: 'Vinho atualizado com sucesso.', product: updatedProduct });
