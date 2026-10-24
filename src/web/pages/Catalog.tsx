@@ -29,6 +29,7 @@ export const Catalog: React.FC<CatalogProps> = ({ currentUser, onNavigateToAuth,
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [formName, setFormName] = useState('');
   const [formPrice, setFormPrice] = useState('');
+  const [formStock, setFormStock] = useState('10');
   const [formDescription, setFormDescription] = useState('');
   const [formImage, setFormImage] = useState('');
   const [formType, setFormType] = useState<Product['type']>('Tinto');
@@ -89,7 +90,7 @@ export const Catalog: React.FC<CatalogProps> = ({ currentUser, onNavigateToAuth,
 
   const openCreateModal = () => {
     setEditingProduct(null);
-    setFormName(''); setFormPrice(''); setFormDescription('');
+    setFormName(''); setFormPrice(''); setFormStock('10'); setFormDescription('');
     setFormImage(''); setFormType('Tinto'); setFormGrape('');
     setFormCountry(''); setFormHarvest(''); setFormAlcohol('');
     setFormError(null);
@@ -98,7 +99,7 @@ export const Catalog: React.FC<CatalogProps> = ({ currentUser, onNavigateToAuth,
 
   const openEditModal = (p: Product) => {
     setEditingProduct(p);
-    setFormName(p.name); setFormPrice(p.price); setFormDescription(p.description);
+    setFormName(p.name); setFormPrice(p.price); setFormStock(p.stock !== undefined ? p.stock.toString() : '0'); setFormDescription(p.description);
     setFormImage(p.image); setFormType(p.type); setFormGrape(p.grape);
     setFormCountry(p.country); setFormHarvest(p.harvest.toString()); setFormAlcohol(p.alcohol);
     setFormError(null);
@@ -111,15 +112,17 @@ export const Catalog: React.FC<CatalogProps> = ({ currentUser, onNavigateToAuth,
     setFormError(null);
 
     const priceNum = parseFloat(formPrice);
+    const stockNum = parseInt(formStock, 10);
     const harvestNum = parseInt(formHarvest);
     const alcoholNum = parseFloat(formAlcohol);
 
     if (isNaN(priceNum) || priceNum <= 0) { setFormError('O preço deve ser um número maior que zero.'); setFormLoading(false); return; }
+    if (isNaN(stockNum) || stockNum < 0) { setFormError('O estoque deve ser um número inteiro igual ou maior que zero.'); setFormLoading(false); return; }
     if (isNaN(harvestNum) || harvestNum < 1800) { setFormError('A safra deve ser um ano válido.'); setFormLoading(false); return; }
     if (isNaN(alcoholNum) || alcoholNum <= 0) { setFormError('O teor alcoólico deve ser maior que zero.'); setFormLoading(false); return; }
 
     const payload = {
-      name: formName, price: priceNum, description: formDescription,
+      name: formName, price: priceNum, stock: stockNum, description: formDescription,
       image: formImage || FALLBACK_IMAGE,
       type: formType, grape: formGrape, country: formCountry,
       harvest: harvestNum, alcohol: alcoholNum,
@@ -331,18 +334,29 @@ export const Catalog: React.FC<CatalogProps> = ({ currentUser, onNavigateToAuth,
                   label="Preço (R$)"
                   type="number"
                   step="0.01"
+                  min="0"
                   value={formPrice}
                   onChange={e => setFormPrice(e.target.value)}
                   required
                 />
-                <div className="form-group">
-                  <label className="form-label">Tipo de Vinho</label>
-                  <select className="form-select" value={formType} onChange={e => setFormType(e.target.value as any)}>
-                    {['Tinto', 'Branco', 'Rosé', 'Espumante', 'Sobremesa'].map(t => (
-                      <option key={t} value={t}>{t}</option>
-                    ))}
-                  </select>
-                </div>
+                <Input
+                  label="Estoque (Unidades)"
+                  type="number"
+                  step="1"
+                  min="0"
+                  value={formStock}
+                  onChange={e => setFormStock(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Tipo de Vinho</label>
+                <select className="form-select" value={formType} onChange={e => setFormType(e.target.value as any)}>
+                  {['Tinto', 'Branco', 'Rosé', 'Espumante', 'Sobremesa'].map(t => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
               </div>
 
               {/* Campo Duplo de Imagem: Upload do Computador ou URL Externa */}

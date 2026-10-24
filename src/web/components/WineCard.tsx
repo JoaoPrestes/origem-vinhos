@@ -14,6 +14,7 @@ export interface Product {
   country: string;
   harvest: number;
   alcohol: string;
+  stock?: number;
 }
 
 interface WineCardProps {
@@ -151,6 +152,19 @@ export const WineCard: React.FC<WineCardProps> = ({
         <p className="wine-card-country">{product.country}</p>
         <div className="wine-card-footer">
           <span className="wine-card-price">R$ {product.price}</span>
+          {isAdmin && product.stock !== undefined && (
+            <span
+              className="wine-card-stock"
+              style={{
+                fontSize: '0.75rem',
+                color: product.stock > 0 ? 'var(--color-text-secondary)' : '#ef4444',
+                fontWeight: 500,
+              }}
+              title="Estoque disponível"
+            >
+              Estoque: {product.stock}
+            </span>
+          )}
         </div>
       </div>
     </article>
