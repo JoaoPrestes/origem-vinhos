@@ -1,6 +1,7 @@
 import type { OrderRepositoryPort } from '../ports/order-repository.port';
 import type { OrderCartCleanerPort } from '../ports/order-cart-cleaner.port';
 import type { OrderPaymentEvent } from '../ports/order-payment-consumer.port';
+import type { OrderStockDeductorPort } from '../ports/order-stock-deductor.port';
 
 export class ProcessPaymentConfirmedUseCase {
   private orderRepo: OrderRepositoryPort;
@@ -12,6 +13,7 @@ export class ProcessPaymentConfirmedUseCase {
   private itemsRepo?: {
     findCartItemIdsByOrderId: (orderId: string) => Promise<string[]>;
   };
+  private stockDeductor?: OrderStockDeductorPort;
 
   constructor(deps: {
     orderRepository: OrderRepositoryPort;
@@ -23,11 +25,13 @@ export class ProcessPaymentConfirmedUseCase {
     itemsRepo?: {
       findCartItemIdsByOrderId: (orderId: string) => Promise<string[]>;
     };
+    stockDeductor?: OrderStockDeductorPort;
   }) {
     this.orderRepo = deps.orderRepository;
     this.cartCleaner = deps.cartCleaner;
     this.inboxRepo = deps.inboxRepo;
     this.itemsRepo = deps.itemsRepo;
+    this.stockDeductor = deps.stockDeductor;
   }
 
   async execute(event: OrderPaymentEvent): Promise<{ status: string }> {
@@ -83,6 +87,16 @@ export class ProcessPaymentConfirmedUseCase {
 
     order.markAsPaid();
     await this.inboxRepo.recordEvent(eventId, orderId, 'PROCESSED');
+
+    // 7. Baixa Realista de Estoque (spec09 §6.1)
+    if (this.stockDeductor) {
+      try {
+        await this.stockDeductor.deductStockForOrder(orderId);
+      } catch (stockErr) {
+        // Falha no estoque não reverte pedido pago; emite aviso sem abortar
+        console.error('Aviso: Falha ao decrementar estoque do pedido pago:', stockErr);
+      }
+    }
 
     // 7. Limpeza Seletiva Precisa do Carrinho (baseada em cartItemIds)
     let effectiveCartItemIds = cartItemIds || [];

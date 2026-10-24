@@ -25,6 +25,11 @@ export const products = pgTable('products', {
   country: text('country').notNull(),
   harvest: integer('harvest').notNull(), // Safra (ano)
   alcohol: numeric('alcohol', { precision: 4, scale: 2 }).notNull(), // Ex: 13.50
+  stock: integer('stock').notNull().default(0), // Unidades disponíveis para venda imediata
+  sensory_profile: text('sensory_profile'),      // Ex: "Corpo cheio, taninos firmes, notas de ameixa e carvalho"
+  pairing: text('pairing'),                      // Ex: "Carnes grelhadas, picanha, queijos maturados"
+  harvest_notes: text('harvest_notes'),          // Ex: "Verão seco com colheita manual em março; safra de guarda excepcional"
+  version: integer('version').notNull().default(1), // Versão monotônica para controle de concorrência e idempotência
   deletedAt: timestamp('deleted_at'), // Campo para Soft Delete (nulo se ativo)
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
@@ -358,6 +363,30 @@ export const paymentAttemptsRelations = relations(paymentAttempts, ({ one, many 
   }),
   history: many(paymentHistory),
 }));
+
+// ==========================================
+// 15. Tabela catalog_outbox (RAG Ingestion Queue - spec09 §6.1)
+// ==========================================
+export const catalogOutbox = pgTable(
+  'catalog_outbox',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    productId: uuid('product_id').notNull(),
+    eventType: text('event_type').notNull(), // 'PRODUCT_CREATED' | 'PRODUCT_UPDATED' | 'PRODUCT_DELETED'
+    version: integer('version').notNull(),
+    status: text('status').$type<'PENDING' | 'PROCESSING' | 'PROCESSED' | 'FAILED'>().notNull().default('PENDING'),
+    retryCount: integer('retry_count').notNull().default(0),
+    lockedUntil: timestamp('locked_until'),
+    errorMessage: text('error_message'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    processedAt: timestamp('processed_at'),
+  },
+  (table) => ({
+    catalogOutboxPendingIdx: index('catalog_outbox_pending_idx').on(table.status, table.createdAt),
+    catalogOutboxLeaseIdx: index('catalog_outbox_lease_idx').on(table.status, table.lockedUntil),
+    catalogOutboxProductIdx: index('catalog_outbox_product_idx').on(table.productId),
+  })
+);
 
 
 
