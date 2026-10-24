@@ -1,7 +1,5 @@
 # Chatbot RAG & Sommelier Virtual (spec09) Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** Build and integrate the production-grade RAG Chatbot & Virtual Sommelier for Origem Vinhos, featuring PostgreSQL Transactional Outbox, autonomous worker ingestion, dual-index synchronization (ChromaDB 768d + SQLite FTS5 BM25 PT-BR), 18s global deadline orchestration, Funil da Verdade, Post-Generation Grounding Check with price regex interception, and a Crisp-style Floating Chat Drawer with wine mini cards.
 
 **Architecture:** Hexagonal architecture under `src/domains/catalog/` with clean Ports & Adapters. Asynchronous ingestion decouples writes from vector/lexical indexing via Transactional Outbox. Real-time consumption enforces the Funil da Verdade on PostgreSQL and Post-Generation Grounding Check on Gemini outputs before returning sovereign verified Mini Cards.

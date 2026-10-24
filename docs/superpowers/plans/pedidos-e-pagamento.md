@@ -1,7 +1,5 @@
 # Plano de Implementação — Pedidos (`spec08`) e Pagamento (`spec07`)
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** Implementar o fluxo completo de checkout do Origem Vinhos, transformando o carrinho em um pedido soberano no estado `PENDING_PAYMENT` com snapshot imutável de itens/endereço e liquidando-o de forma atômica e desacoplada via Módulo de Pagamento e Transactional Outbox.
 
 **Architecture:** Arquitetura Hexagonal (Ports & Adapters) em TypeScript estrito sobre Bun e PostgreSQL gerenciado por Drizzle ORM. Pedidos atuam como o agregado imutável de itens e valores soberanos em centavos inteiros; Pagamento orquestra cobranças isoladas (`PaymentAttempt`) e comunica confirmações financeiras de forma assíncrona e confiável via tabela `payment_outbox` consumida pela `order_inbox_events`.

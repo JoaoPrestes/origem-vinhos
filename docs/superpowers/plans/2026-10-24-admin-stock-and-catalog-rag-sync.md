@@ -1,7 +1,5 @@
 # Admin Stock Management and Catalog RAG Synchronization Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** Enable stock management in the Admin CRUD modal, ensure the Catalog Ingestion Worker automatically synchronizes catalog events to SQLite FTS and ChromaDB, and reconcile outbox records so newly added wines (like Château Les Compères Sauternes) are indexed and recommended by the Sommelier RAG chatbot.
 
 **Architecture:** Frontend React updates `Product` interface and the "Novo Vinho / Editar Vinho" modal with an `Estoque (Unidades)` numeric input. The payload is sent to `POST /api/catalog` or `PUT /api/catalog/:id` which already supports stock in `schema.ts` and `catalog.repository.ts`. `src/index.ts` is configured to launch `startCatalogIngestionWorker` automatically outside of unit tests, continuously polling `catalog_outbox` and synchronizing chunks with SQLite FTS and ChromaDB. Sauternes' stock is updated to positive stock (`10`), and outbox events are drained and verified.

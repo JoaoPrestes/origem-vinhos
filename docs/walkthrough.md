@@ -37,11 +37,9 @@ Para comprovar a qualidade visual e de fluxos do projeto, realizamos um teste fu
 5. Adição de vinho ("Château Margaux 2015") com sucesso ao carrinho.
 6. Alteração de quantidades (de 1 para 2 garrafas) no carrinho de compras e atualização imediata do valor total para **R$ 1.700,00**.
 
-### Vídeo da Sessão de Navegação:
-![Gravação da Sessão de Testes E2E](C:/Users/João%20Otavio%20Gamer/.gemini/antigravity-ide/brain/e5c14612-985a-42a7-bcb0-a07caa4d4443/testing_origem_vinhos_e2e_1783747114988.webp)
-
-### Estado do Carrinho Recalculado (2 Garrafas):
-![Estado Final do Carrinho no Teste](C:/Users/João%20Otavio%20Gamer/.gemini/antigravity-ide/brain/e5c14612-985a-42a7-bcb0-a07caa4d4443/final_cart_state_1783747277915.png)
+### Resumo da Sessão de Validação:
+- **Fluxo Validado:** Verificação de maioridade (+18) -> Consulta de catálogo -> Autenticação de cliente -> Adição de rótulo ao carrinho -> Recalculo em tempo real (2 garrafas = R$ 1.700,00).
+- **Cobertura de Automação:** Validado via suíte de testes de integração e testes E2E do sistema.
 
 ---
 

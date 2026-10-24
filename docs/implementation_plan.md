@@ -30,11 +30,11 @@ Este plano técnico estabelece a estratégia de desenvolvimento incremental para
 ## Refinamento Arquitetural & Alinhamento SOLID / Clean Architecture
 
 1. **Separação Estrita de Domínio e Infraestrutura (Ports & Adapters):**
-   * O **Domínio** ([src/domains/address/address.service.ts](file:///c:/Users/Jo%C3%A3o%20Otavio%20Gamer/Desktop/Projetos%20Antigravity/Origem%20Vinhos/src/domains/address/address.service.ts)) define estritamente o contrato/interface do *Port* (`CepLookupService`).
-   * A **Infraestrutura** ([src/infra/cep/viacep.adapter.ts](file:///c:/Users/Jo%C3%A3o%20Otavio%20Gamer/Desktop/Projetos%20Antigravity/Origem%20Vinhos/src/infra/cep/viacep.adapter.ts)) implementa o *Adapter* concreto (`ViaCepAdapter`). O domínio **não possui nenhuma referência ao ViaCEP**. A substituição futura pelos Correios ocorrerá exclusivamente na camada de infraestrutura.
+   * O **Domínio** ([src/domains/address/address.service.ts](../src/domains/address/address.service.ts)) define estritamente o contrato/interface do *Port* (`CepLookupService`).
+   * A **Infraestrutura** ([src/infra/cep/viacep.adapter.ts](../src/infra/cep/viacep.adapter.ts)) implementa o *Adapter* concreto (`ViaCepAdapter`). O domínio **não possui nenhuma referência ao ViaCEP**. A substituição futura pelos Correios ocorrerá exclusivamente na camada de infraestrutura.
 2. **Desacoplamento de Responsabilidades do Repositório (SRP):**
-   * O **Repository** ([src/domains/address/address.repository.ts](file:///c:/Users/Jo%C3%A3o%20Otavio%20Gamer/Desktop/Projetos%20Antigravity/Origem%20Vinhos/src/domains/address/address.repository.ts)) atua exclusivamente na persistência pura de dados (operações de `insert`, `select`, `update`, `delete`).
-   * O **Domain Service** ([src/domains/address/address.service.ts](file:///c:/Users/Jo%C3%A3o%20Otavio%20Gamer/Desktop/Projetos%20Antigravity/Origem%20Vinhos/src/domains/address/address.service.ts)) orquestra as regras de negócio: auto-atribuição de padrão no 1º cadastro, elevação automática do endereço mais recente na exclusão do padrão, e alternância atômica do indicador `isDefault`.
+   * O **Repository** ([src/domains/address/address.repository.ts](../src/domains/address/address.repository.ts)) atua exclusivamente na persistência pura de dados (operações de `insert`, `select`, `update`, `delete`).
+   * O **Domain Service** ([src/domains/address/address.service.ts](../src/domains/address/address.service.ts)) orquestra as regras de negócio: auto-atribuição de padrão no 1º cadastro, elevação automática do endereço mais recente na exclusão do padrão, e alternância atômica do indicador `isDefault`.
 3. **Gerenciamento de Configurações Externas (Sem Valores Hardcoded):**
    * `VIA_CEP_URL`: lido via `process.env.VIA_CEP_URL` (padrão: `https://viacep.com.br/ws`).
    * `CEP_TIMEOUT_MS`: lido via `Number(process.env.CEP_TIMEOUT_MS)` (padrão: `5000`).
@@ -50,7 +50,7 @@ Este plano técnico estabelece a estratégia de desenvolvimento incremental para
 #### Objetivo
 Adicionar a tabela `addresses` e os relacionamentos 1:N com `users` diretamente no schema centralizado do Drizzle em `src/infra/schema.ts`.
 
-#### [MODIFY] [schema.ts](file:///c:/Users/Jo%C3%A3o%20Otavio%20Gamer/Desktop/Projetos%20Antigravity/Origem%20Vinhos/src/infra/schema.ts)
+#### [MODIFY] [schema.ts](../src/infra/schema.ts)
 - Definir a tabela `addresses` (`id`, `userId`, `zipCode`, `street`, `number`, `complement`, `neighborhood`, `city`, `state`, `label`, `isDefault`, `createdAt`, `updatedAt`).
 - Definir `addressesRelations` e atualizar `usersRelations`.
 
@@ -67,20 +67,20 @@ Adicionar a tabela `addresses` e os relacionamentos 1:N com `users` diretamente 
 #### Objetivo
 Implementar os schemas Zod de validação, a persistência pura em `AddressRepository`, os casos de uso no `AddressService` (Port `CepLookupService`) e o adapter concreto `ViaCepAdapter` na camada `src/infra/cep/`.
 
-#### [NEW] [schema.ts](file:///c:/Users/Jo%C3%A3o%20Otavio%20Gamer/Desktop/Projetos%20Antigravity/Origem%20Vinhos/src/domains/address/schema.ts)
+#### [NEW] [schema.ts](../src/domains/address/schema.ts)
 - Schemas Zod de entrada/saída (`createAddressSchema`, `updateAddressSchema`, `cepQuerySchema`).
 
-#### [NEW] [address.repository.ts](file:///c:/Users/Jo%C3%A3o%20Otavio%20Gamer/Desktop/Projetos%20Antigravity/Origem%20Vinhos/src/domains/address/address.repository.ts)
+#### [NEW] [address.repository.ts](../src/domains/address/address.repository.ts)
 - Persistência pura sem regras de negócio: `insert`, `findById`, `findByUserId`, `update`, `delete`, `clearDefaultFlags`.
 
-#### [NEW] [address.service.ts](file:///c:/Users/Jo%C3%A3o%20Otavio%20Gamer/Desktop/Projetos%20Antigravity/Origem%20Vinhos/src/domains/address/address.service.ts)
+#### [NEW] [address.service.ts](../src/domains/address/address.service.ts)
 - Contrato da interface `CepLookupService` (Port).
 - Lógica das regras de domínio: atribuição inicial do 1º endereço como padrão, elevação automática do endereço mais recente ao deletar o padrão, alternância de padrão.
 
-#### [NEW] [viacep.adapter.ts](file:///c:/Users/Jo%C3%A3o%20Otavio%20Gamer/Desktop/Projetos%20Antigravity/Origem%20Vinhos/src/infra/cep/viacep.adapter.ts)
+#### [NEW] [viacep.adapter.ts](../src/infra/cep/viacep.adapter.ts)
 - Implementação isolada de `CepLookupService` consumindo `process.env.VIA_CEP_URL` e `process.env.CEP_TIMEOUT_MS`.
 
-#### [NEW] [address.test.ts](file:///c:/Users/Jo%C3%A3o%20Otavio%20Gamer/Desktop/Projetos%20Antigravity/Origem%20Vinhos/tests/address.test.ts)
+#### [NEW] [address.test.ts](../tests/address.test.ts)
 - Testes unitários para regras de serviço e sanitização.
 - Testes de integração para repositório e adapter HTTP.
 
@@ -97,13 +97,13 @@ Implementar os schemas Zod de validação, a persistência pura em `AddressRepos
 #### Objetivo
 Implementar os handlers de requisição HTTP (`address.handlers.ts`) e conectar as rotas REST ao servidor HTTP do Bun (`src/index.ts`).
 
-#### [NEW] [address.handlers.ts](file:///c:/Users/Jo%C3%A3o%20Otavio%20Gamer/Desktop/Projetos%20Antigravity/Origem%20Vinhos/src/domains/address/address.handlers.ts)
+#### [NEW] [address.handlers.ts](../src/domains/address/address.handlers.ts)
 - Handlers: `list`, `create`, `update`, `delete`, `setDefault`, `lookupCep`.
 
-#### [MODIFY] [index.ts](file:///c:/Users/Jo%C3%A3o%20Otavio%20Gamer/Desktop/Projetos%20Antigravity/Origem%20Vinhos/src/index.ts)
+#### [MODIFY] [index.ts](../src/index.ts)
 - Registrar as rotas `/api/addresses` e `/api/addresses/lookup-cep/:cep`.
 
-#### [MODIFY] [e2e.test.ts](file:///c:/Users/Jo%C3%A3o%20Otavio%20Gamer/Desktop/Projetos%20Antigravity/Origem%20Vinhos/tests/e2e.test.ts)
+#### [MODIFY] [e2e.test.ts](../tests/e2e.test.ts)
 - Adicionar cobertura HTTP para os novos endpoints de endereço.
 
 #### Testes Necessários
@@ -119,16 +119,16 @@ Implementar os handlers de requisição HTTP (`address.handlers.ts`) e conectar 
 #### Objetivo
 Desenvolver os componentes `AddressFormModal` e `AddressList` integrados à página `Profile.tsx`.
 
-#### [NEW] [AddressFormModal.tsx](file:///c:/Users/Jo%C3%A3o%20Otavio%20Gamer/Desktop/Projetos%20Antigravity/Origem%20Vinhos/src/web/components/AddressFormModal.tsx)
+#### [NEW] [AddressFormModal.tsx](../src/web/components/AddressFormModal.tsx)
 - Modal com busca automática por CEP (8 dígitos), auto-preenchimento, preservação de campos manuais e aviso de fallback.
 
-#### [NEW] [AddressList.tsx](file:///c:/Users/Jo%C3%A3o%20Otavio%20Gamer/Desktop/Projetos%20Antigravity/Origem%20Vinhos/src/web/components/AddressList.tsx)
+#### [NEW] [AddressList.tsx](../src/web/components/AddressList.tsx)
 - Listagem dos cards com opção de editar, excluir e marcar como padrão.
 
-#### [MODIFY] [Profile.tsx](file:///c:/Users/Jo%C3%A3o%20Otavio%20Gamer/Desktop/Projetos%20Antigravity/Origem%20Vinhos/src/web/pages/Profile.tsx)
+#### [MODIFY] [Profile.tsx](../src/web/pages/Profile.tsx)
 - Integrar a aba/seção "Meus Endereços".
 
-#### [MODIFY] [index.css](file:///c:/Users/Jo%C3%A3o%20Otavio%20Gamer/Desktop/Projetos%20Antigravity/Origem%20Vinhos/src/web/index.css)
+#### [MODIFY] [index.css](../src/web/index.css)
 - Estilos dos modais e cards conforme o Design System V2.
 
 #### Testes Necessários
@@ -144,13 +144,13 @@ Desenvolver os componentes `AddressFormModal` e `AddressList` integrados à pág
 #### Objetivo
 Adicionar o botão "Finalizar Compra" no Carrinho, criar a estrutura da página `Checkout.tsx` e exibir o Endereço Padrão selecionado.
 
-#### [NEW] [Checkout.tsx](file:///c:/Users/Jo%C3%A3o%20Otavio%20Gamer/Desktop/Projetos%20Antigravity/Origem%20Vinhos/src/web/pages/Checkout.tsx)
+#### [NEW] [Checkout.tsx](../src/web/pages/Checkout.tsx)
 - Exibição inicial do Checkout com resumo de produtos e o Endereço Padrão do usuário.
 
-#### [MODIFY] [Cart.tsx](file:///c:/Users/Jo%C3%A3o%20Otavio%20Gamer/Desktop/Projetos%20Antigravity/Origem%20Vinhos/src/web/pages/Cart.tsx)
+#### [MODIFY] [Cart.tsx](../src/web/pages/Cart.tsx)
 - Botão "Finalizar Compra" navegando para a rota de checkout.
 
-#### [MODIFY] [App.tsx](file:///c:/Users/Jo%C3%A3o%20Otavio%20Gamer/Desktop/Projetos%20Antigravity/Origem%20Vinhos/src/web/App.tsx)
+#### [MODIFY] [App.tsx](../src/web/App.tsx)
 - Registro da página `'checkout'`.
 
 #### Testes Necessários
@@ -166,7 +166,7 @@ Adicionar o botão "Finalizar Compra" no Carrinho, criar a estrutura da página 
 #### Objetivo
 Bloquear o avanço no Checkout para usuários com 0 endereços cadastrados, redirecionar para a tela de cadastro e retornar automaticamente ao Checkout após salvar o endereço.
 
-#### [MODIFY] [Checkout.tsx](file:///c:/Users/Jo%C3%A3o%20Otavio%20Gamer/Desktop/Projetos%20Antigravity/Origem%20Vinhos/src/web/pages/Checkout.tsx)
+#### [MODIFY] [Checkout.tsx](../src/web/pages/Checkout.tsx)
 - Intercepção se `hasAddresses === false`, exibindo alerta e disparando o modal de cadastro de endereço com contexto de retorno.
 
 #### Testes Necessários
