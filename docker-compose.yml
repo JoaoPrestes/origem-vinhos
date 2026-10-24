@@ -14,6 +14,18 @@ services:
     volumes:
       - origemvinhos_pgdata:/var/lib/postgresql/data
 
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: origem-vinhos-chroma
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - origemvinhos_chromadata:/chroma/chroma
+
 volumes:
   origemvinhos_pgdata:
     driver: local
+  origemvinhos_chromadata:
+    driver: local
+
