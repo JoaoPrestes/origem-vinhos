@@ -79,12 +79,25 @@ app.get('/index.js', () => {
   });
 });
 
-// Servir o arquivo CSS
+// Servir o CSS final já empacotado pelo Bun.build (com todos os @import resolvidos)
 app.get('/index.css', () => {
-  const file = Bun.file('./src/web/index.css');
+  const file = Bun.file('./dist/index.css');
   return new Response(file, {
     headers: { 'Content-Type': 'text/css' },
   });
+});
+
+// Redundância: sub-folhas de estilo nunca devem cair no fallback do SPA (HTML)
+app.get('/styles/*', async (c) => {
+  const fileName = decodeURIComponent(c.req.path).replace(/^\/styles\//, '');
+  if (fileName.includes('..') || !fileName.endsWith('.css')) {
+    return c.notFound();
+  }
+  const file = Bun.file(`./src/web/styles/${fileName}`);
+  if (await file.exists()) {
+    return new Response(file, { headers: { 'Content-Type': 'text/css' } });
+  }
+  return c.notFound();
 });
 
 // Fallback SPA: qualquer rota não-API serve o index.html
