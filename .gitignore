@@ -38,3 +38,9 @@ scratch
 
 # Finder (MacOS) folder config
 .DS_Store
+
+# SQLite local databases
+*.db
+*.db-shm
+*.db-wal
+data/

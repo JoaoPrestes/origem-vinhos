@@ -18,17 +18,33 @@ export class ChromaVectorStoreAdapter implements RagVectorStorePort {
   private collectionPromise: Promise<Collection> | null = null;
 
   constructor(options?: ChromaVectorStoreAdapterOptions) {
-    this.client = options?.client ?? new ChromaClient({
-      path: options?.url || process.env.CHROMA_URL || 'http://localhost:8000',
-    });
+    if (options?.client) {
+      this.client = options.client;
+    } else {
+      const rawUrl = options?.url || process.env.CHROMA_URL || 'http://localhost:8000';
+      try {
+        const parsed = new URL(rawUrl);
+        this.client = new ChromaClient({
+          ssl: parsed.protocol === 'https:',
+          host: parsed.hostname,
+          port: parsed.port ? parseInt(parsed.port, 10) : (parsed.protocol === 'https:' ? 443 : 8000),
+        });
+      } catch {
+        this.client = new ChromaClient({ path: rawUrl });
+      }
+    }
     this.collectionName = options?.collectionName || 'origem_vinhos_catalog';
   }
 
   private async getCollection(): Promise<Collection> {
     if (!this.collectionPromise) {
+      const dummyEmbeddingFunction = {
+        generate: async (texts: string[]) => texts.map(() => new Array(768).fill(0)),
+      };
       this.collectionPromise = this.client.getOrCreateCollection({
         name: this.collectionName,
         metadata: { 'hnsw:space': 'cosine' },
+        embeddingFunction: dummyEmbeddingFunction as any,
       });
     }
     return await this.collectionPromise;
