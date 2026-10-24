@@ -23,7 +23,7 @@ export class GeminiAiAdapter implements RagAiGatewayPort {
   constructor(options: GeminiAiAdapterOptions = {}) {
     this.apiKey = options.apiKey || process.env.GEMINI_API_KEY || '';
     this.embeddingModel = options.embeddingModel || process.env.GEMINI_EMBEDDING_MODEL || 'gemini-embedding-001';
-    this.chatModel = options.chatModel || process.env.GEMINI_CHAT_MODEL || 'gemini-2.5-flash';
+    this.chatModel = options.chatModel || process.env.GEMINI_CHAT_MODEL || 'gemini-3.8-flash';
 
     if (options.client) {
       this.client = options.client;
@@ -42,11 +42,14 @@ export class GeminiAiAdapter implements RagAiGatewayPort {
       },
     });
 
-    if (!response.embedding || !response.embedding.values) {
+    const values =
+      (response as any).embeddings?.[0]?.values || (response as any).embedding?.values;
+
+    if (!values || !Array.isArray(values)) {
       throw new Error(`Failed to generate embeddings from Gemini API`);
     }
 
-    return response.embedding.values;
+    return values;
   }
 
   async decomposeQuery(userQuery: string): Promise<QueryDecomposition> {
@@ -59,34 +62,50 @@ Identifique:
 
 Consulta do usuário: "${userQuery}"`;
 
-    const response = await this.client.models.generateContent({
-      model: this.chatModel,
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            semanticQuery: { type: Type.STRING },
-            exactFilters: {
-              type: Type.OBJECT,
-              properties: {
-                category: { type: Type.STRING },
-                maxPrice: { type: Type.NUMBER },
-                country: { type: Type.STRING },
-                style: { type: Type.STRING },
+    try {
+      const generatePromise = this.client.models.generateContent({
+        model: this.chatModel,
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              semanticQuery: { type: Type.STRING },
+              exactFilters: {
+                type: Type.OBJECT,
+                properties: {
+                  category: { type: Type.STRING },
+                  maxPrice: { type: Type.NUMBER },
+                  country: { type: Type.STRING },
+                  style: { type: Type.STRING },
+                },
               },
+              requiresEditorialNotes: { type: Type.BOOLEAN },
+              isGreetingOrSmallTalk: { type: Type.BOOLEAN },
             },
-            requiresEditorialNotes: { type: Type.BOOLEAN },
-            isGreetingOrSmallTalk: { type: Type.BOOLEAN },
+            required: ['semanticQuery', 'exactFilters', 'requiresEditorialNotes', 'isGreetingOrSmallTalk'],
           },
-          required: ['semanticQuery', 'exactFilters', 'requiresEditorialNotes', 'isGreetingOrSmallTalk'],
         },
-      },
-    });
+      });
 
-    const rawText = response.text || '{}';
-    return JSON.parse(rawText) as QueryDecomposition;
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Gemini API partial timeout (4s)')), 4000)
+      );
+
+      const response = await Promise.race([generatePromise, timeoutPromise]);
+      const rawText = response.text || '{}';
+      return JSON.parse(rawText) as QueryDecomposition;
+    } catch (err) {
+      // Resilient heuristic fallback on API timeout / 503 / network errors (spec09 §8.2 & §10)
+      const isGreeting = /^(ol[aá]|oi|bom dia|boa tarde|boa noite|saudações)[\s!,.]*$/i.test(userQuery.trim());
+      return {
+        semanticQuery: userQuery,
+        exactFilters: {},
+        requiresEditorialNotes: false,
+        isGreetingOrSmallTalk: isGreeting,
+      };
+    }
   }
 
   async generateSommelierResponse(prompt: {
@@ -105,31 +124,44 @@ Consulta do usuário: "${userQuery}"`;
       },
     ];
 
-    const response = await this.client.models.generateContent({
-      model: this.chatModel,
-      contents: contents as any,
-      config: {
-        systemInstruction: prompt.systemInstruction,
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            reply: {
-              type: Type.STRING,
-              description: 'Resposta educada, elegante e precisa do sommelier com base única e estrita nas evidências fornecidas.',
+    try {
+      const generatePromise = this.client.models.generateContent({
+        model: this.chatModel,
+        contents: contents as any,
+        config: {
+          systemInstruction: prompt.systemInstruction,
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              reply: {
+                type: Type.STRING,
+                description: 'Resposta educada, elegante e precisa do sommelier com base única e estrita nas evidências fornecidas.',
+              },
+              citedProductIds: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING },
+                description: 'Lista de IDs únicos dos produtos do catálogo citados ou recomendados na resposta.',
+              },
             },
-            citedProductIds: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING },
-              description: 'Lista de IDs únicos dos produtos do catálogo citados ou recomendados na resposta.',
-            },
+            required: ['reply', 'citedProductIds'],
           },
-          required: ['reply', 'citedProductIds'],
         },
-      },
-    });
+      });
 
-    const rawText = response.text || '{}';
-    return JSON.parse(rawText) as SommelierResponse;
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Gemini API partial timeout (4s)')), 4000)
+      );
+
+      const response = await Promise.race([generatePromise, timeoutPromise]);
+      const rawText = response.text || '{}';
+      return JSON.parse(rawText) as SommelierResponse;
+    } catch (err) {
+      // Resilient fallback on LLM 503 / timeout
+      return {
+        reply: 'Selecionei estes rótulos excepcionais da nossa adega especialmente para sua apreciação:',
+        citedProductIds: [],
+      };
+    }
   }
 }

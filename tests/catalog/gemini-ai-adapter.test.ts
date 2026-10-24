@@ -36,7 +36,7 @@ describe('GeminiAiAdapter (spec09 §6.3 & §8.5)', () => {
 
   it('should decompose user queries into structured filters and semantic search', async () => {
     const mockGenerateContent = mock(async ({ model, contents, config }: any) => {
-      expect(model).toBe('gemini-2.5-flash');
+      expect(model).toBe('gemini-3.8-flash');
       expect(config.responseMimeType).toBe('application/json');
       return {
         text: JSON.stringify({
@@ -68,7 +68,7 @@ describe('GeminiAiAdapter (spec09 §6.3 & §8.5)', () => {
 
   it('should generate sommelier response with cited product IDs', async () => {
     const mockGenerateContent = mock(async ({ model, contents, config }: any) => {
-      expect(model).toBe('gemini-2.5-flash');
+      expect(model).toBe('gemini-3.8-flash');
       return {
         text: JSON.stringify({
           reply: 'Recomendo o Serra Malbec 2018 pelo seu perfil encorpado.',

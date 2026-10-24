@@ -72,6 +72,10 @@ const server = Bun.serve({
       }
     }
 
+    if (url.pathname === '/api/chat') {
+      return await catalogHandlers.chat(req);
+    }
+
     if (url.pathname === '/api/catalog') {
       if (req.method === 'GET') return await catalogHandlers.list(req);
       if (req.method === 'POST') return await catalogHandlers.create(req);
@@ -216,3 +220,5 @@ const server = Bun.serve({
 });
 
 console.log(`Adega virtual rodando em: http://localhost:${server.port}`);
+
+export default server;

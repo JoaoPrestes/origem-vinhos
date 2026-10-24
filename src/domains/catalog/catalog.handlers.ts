@@ -2,6 +2,14 @@ import { CatalogRepository } from './catalog.repository';
 import { createProductSchema, updateProductSchema } from './schema';
 import { getAuthenticatedUser } from '../identity/identity.handlers';
 import { ZodError } from 'zod';
+import { BunSqliteFtsAdapter } from './adapters/bun-sqlite-fts.adapter';
+import { ChromaVectorStoreAdapter } from './adapters/chroma-vector-store.adapter';
+import { GeminiAiAdapter } from './adapters/gemini-ai.adapter';
+import { HybridSearchService } from './services/hybrid-search.service';
+import {
+  ChatOrchestratorUseCase,
+  DrizzleChatDbAdapter,
+} from './use-cases/chat-orchestrator.use-case';
 
 const catalogRepository = new CatalogRepository();
 
@@ -167,6 +175,47 @@ export class CatalogHandlers {
       return jsonResponse({ message: 'Vinho excluído logicamente do catálogo com sucesso.' });
     } catch {
       return jsonResponse({ error: 'Erro interno ao excluir vinho.' }, 500);
+    }
+  }
+
+  // POST /api/chat
+  async chat(req: Request): Promise<Response> {
+    if (req.method !== 'POST') {
+      return jsonResponse({ error: 'Método não permitido. Utilize POST.' }, 405);
+    }
+
+    try {
+      const body = await req.json();
+      if (!body || typeof body.message !== 'string' || body.message.trim().length === 0) {
+        return jsonResponse({ error: 'A mensagem do chat é obrigatória.' }, 400);
+      }
+
+      const lexicalIndex = new BunSqliteFtsAdapter(process.env.SQLITE_DB_PATH || 'origem_catalog.db');
+      const vectorStore = new ChromaVectorStoreAdapter({ url: process.env.CHROMA_URL || 'http://localhost:8000' });
+      const aiGateway = new GeminiAiAdapter();
+      const hybridSearch = new HybridSearchService({
+        vectorStore,
+        lexicalIndex,
+        aiGateway,
+      });
+      const dbAdapter = new DrizzleChatDbAdapter();
+
+      const orchestrator = new ChatOrchestratorUseCase({
+        hybridSearch,
+        aiGateway,
+        db: dbAdapter,
+      });
+
+      const response = await orchestrator.execute({
+        sessionId: body.sessionId,
+        message: body.message,
+        history: body.history,
+      });
+
+      return jsonResponse(response, 200);
+    } catch (err: any) {
+      console.error('[CatalogHandlers] Chat error:', err);
+      return jsonResponse({ error: err?.message || 'Erro ao processar mensagem do chatbot.' }, 500);
     }
   }
 }
