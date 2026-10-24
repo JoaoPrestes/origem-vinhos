@@ -1,8 +1,6 @@
-version: '3.8'
-
 services:
   postgres:
-    image: postgres:latest
+    image: postgres:18
     container_name: origem-vinhos-postgres
     restart: always
     environment:
@@ -12,7 +10,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - origemvinhos_pgdata:/var/lib/postgresql/data
+      - origemvinhos_pgdata:/var/lib/postgresql
 
   chromadb:
     image: chromadb/chroma:latest
