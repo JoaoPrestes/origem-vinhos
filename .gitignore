@@ -44,3 +44,7 @@ scratch
 *.db-shm
 *.db-wal
 data/
+
+# User uploaded dynamic media
+public/uploads/*
+!public/uploads/.gitkeep

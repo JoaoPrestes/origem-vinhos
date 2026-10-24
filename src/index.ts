@@ -65,7 +65,7 @@ const server = Bun.serve({
       if (req.method === 'POST') return await handleFileUpload(req);
     }
 
-    if (url.pathname.startsWith('/uploads/')) {
+    if (url.pathname.startsWith('/uploads/') || url.pathname.startsWith('/assets/')) {
       const decodedPath = decodeURIComponent(url.pathname);
       const file = Bun.file(`./public${decodedPath}`);
       if (await file.exists()) {

@@ -39,7 +39,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             aria-label="Ir para o início — Origem Vinhos"
           >
             <img
-              src="/uploads/logo-v2.png"
+              src="/assets/logo.png"
               alt="Origem Vinhos"
               className="navbar-logo-img"
             />
