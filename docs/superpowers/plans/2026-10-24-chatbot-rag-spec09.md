@@ -43,7 +43,7 @@
 - Consumes: `products` table from `src/infra/schema.ts`, `ProcessPaymentConfirmedUseCase`
 - Produces: `stock`, `sensory_profile`, `pairing`, `harvest_notes`, `version` columns in `products`, `catalog_outbox` table, and stock deduction logic in `ProcessPaymentConfirmedUseCase`
 
-- [ ] **Step 1: Write the failing test for schema columns and atomic stock deduction**
+- [x] **Step 1: Write the failing test for schema columns and atomic stock deduction**
 
 ```typescript
 // tests/catalog/schema-and-stock.test.ts
@@ -78,23 +78,23 @@ describe('Schema Evolution & Stock Deduction (spec09 §6.1)', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `bun test tests/catalog/schema-and-stock.test.ts`
 Expected: FAIL (products.stock or catalogOutbox not defined)
 
-- [ ] **Step 3: Update `src/infra/schema.ts` and `ProcessPaymentConfirmedUseCase`**
+- [x] **Step 3: Update `src/infra/schema.ts` and `ProcessPaymentConfirmedUseCase`**
 
 Add `stock`, `sensory_profile`, `pairing`, `harvest_notes`, `version` to `products`.
 Declare `catalog_outbox` table with composite indexes (`catalog_outbox_pending_idx`, `catalog_outbox_lease_idx`, `catalog_outbox_product_idx`).
 In `ProcessPaymentConfirmedUseCase`, accept optional `stockDeductor` port and trigger stock deduction when confirming payment with warning on overselling.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `bun test tests/catalog/schema-and-stock.test.ts`
 Expected: PASS
 
-- [ ] **Step 5: Apply schema changes to PostgreSQL via drizzle-kit and commit**
+- [x] **Step 5: Apply schema changes to PostgreSQL via drizzle-kit and commit**
 
 ```bash
 git add src/infra/schema.ts src/domains/orders/use-cases/process-payment-confirmed.use-case.ts tests/catalog/schema-and-stock.test.ts
@@ -116,7 +116,7 @@ git commit -m "feat(catalog): evolve schema with stock, sommelier fields and cat
 - Consumes: `products` and `catalogOutbox` tables
 - Produces: Atomically emits `PRODUCT_CREATED`, `PRODUCT_UPDATED`, `PRODUCT_DELETED` events to `catalog_outbox` within the CRUD operations
 
-- [ ] **Step 1: Write the failing test for Catalog Outbox event generation**
+- [x] **Step 1: Write the failing test for Catalog Outbox event generation**
 
 ```typescript
 // tests/catalog/catalog-outbox.test.ts
@@ -138,22 +138,22 @@ describe('Catalog Repository Outbox Integration (spec09 §6.1)', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `bun test tests/catalog/catalog-outbox.test.ts`
 Expected: FAIL
 
-- [ ] **Step 3: Implement outbox emission in `CatalogRepository` and use cases**
+- [x] **Step 3: Implement outbox emission in `CatalogRepository` and use cases**
 
 Update `createProductSchema` and `updateProductSchema` in `src/domains/catalog/schema.ts` to accept `stock`, `sensory_profile`, `pairing`, `harvest_notes`.
 In `CatalogRepository`, execute `insert` into `catalogOutbox` inside database transactions for create, update, and softDelete. Increment `version = version + 1` on updates.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `bun test tests/catalog/catalog-outbox.test.ts`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/domains/catalog/schema.ts src/domains/catalog/catalog.repository.ts src/domains/catalog/use-cases/ tests/catalog/catalog-outbox.test.ts
@@ -173,7 +173,7 @@ git commit -m "feat(catalog): integrate outbox event emission and monotonic vers
 - Consumes: Native `bun:sqlite`
 - Produces: `RagLexicalIndexPort` with `upsertChunks`, `deleteProductChunks`, `query`, `getVersion`, `rebuildInPlace`
 
-- [ ] **Step 1: Write the failing test for SQLite FTS5 adapter**
+- [x] **Step 1: Write the failing test for SQLite FTS5 adapter**
 
 ```typescript
 // tests/catalog/sqlite-fts-adapter.test.ts
@@ -206,12 +206,12 @@ describe('BunSqliteFtsAdapter (spec09 §6.2 & §10.3)', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `bun test tests/catalog/sqlite-fts-adapter.test.ts`
 Expected: FAIL (BunSqliteFtsAdapter not found)
 
-- [ ] **Step 3: Implement `BunSqliteFtsAdapter` and port**
+- [x] **Step 3: Implement `BunSqliteFtsAdapter` and port**
 
 Create `src/domains/catalog/ports/rag-lexical-index.port.ts`.
 Create `src/domains/catalog/adapters/bun-sqlite-fts.adapter.ts`:
@@ -221,12 +221,12 @@ Create `src/domains/catalog/adapters/bun-sqlite-fts.adapter.ts`:
 - Sanitizes query: strips PT stopwords, appends `*` prefix for terms $\ge 4$ characters.
 - Implements `rebuildInPlace` using `DROP TABLE... PRAGMA wal_checkpoint(TRUNCATE)`.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `bun test tests/catalog/sqlite-fts-adapter.test.ts`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/domains/catalog/ports/rag-lexical-index.port.ts src/domains/catalog/adapters/bun-sqlite-fts.adapter.ts tests/catalog/sqlite-fts-adapter.test.ts
@@ -247,7 +247,7 @@ git commit -m "feat(catalog): implement SQLite FTS5 lexical index adapter with P
 - Consumes: `chromadb` client
 - Produces: `RagVectorStorePort` with `upsert`, `query`, `delete`, `getByProductId`
 
-- [ ] **Step 1: Write the failing test for Chroma Vector Store Adapter**
+- [x] **Step 1: Write the failing test for Chroma Vector Store Adapter**
 
 ```typescript
 // tests/catalog/chroma-adapter.test.ts
@@ -262,12 +262,12 @@ describe('ChromaVectorStoreAdapter (spec09 §6.3)', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `bun test tests/catalog/chroma-adapter.test.ts`
 Expected: FAIL
 
-- [ ] **Step 3: Update `docker-compose.yml` and implement `ChromaVectorStoreAdapter`**
+- [x] **Step 3: Update `docker-compose.yml` and implement `ChromaVectorStoreAdapter`**
 
 Add `chromadb` service (`chromadb/chroma:latest`) on port 8000 with volume in `docker-compose.yml`.
 Implement `ChromaVectorStoreAdapter`:
@@ -277,12 +277,12 @@ Implement `ChromaVectorStoreAdapter`:
 - `getByProductId`: queries `{ where: { productId } }` to check all chunks and versions.
 - `delete`: deletes given ids.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `bun test tests/catalog/chroma-adapter.test.ts`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add docker-compose.yml src/domains/catalog/ports/rag-vector-store.port.ts src/domains/catalog/adapters/chroma-vector-store.adapter.ts tests/catalog/chroma-adapter.test.ts
@@ -302,7 +302,7 @@ git commit -m "feat(catalog): configure ChromaDB in docker-compose and implement
 - Consumes: `@google/genai` with `GEMINI_API_KEY`
 - Produces: `RagAiGatewayPort` with `generateEmbeddings`, `decomposeQuery`, `generateSommelierResponse`
 
-- [ ] **Step 1: Write the failing test for Gemini AI Adapter**
+- [x] **Step 1: Write the failing test for Gemini AI Adapter**
 
 ```typescript
 // tests/catalog/gemini-ai-adapter.test.ts
@@ -318,23 +318,23 @@ describe('GeminiAiAdapter (spec09 §6.3 & §8.5)', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `bun test tests/catalog/gemini-ai-adapter.test.ts`
 Expected: FAIL
 
-- [ ] **Step 3: Implement `GeminiAiAdapter`**
+- [x] **Step 3: Implement `GeminiAiAdapter`**
 
 - `generateEmbeddings`: calls `gemini-embedding-001` with `outputDimensionality: 768` and `taskType` (`RETRIEVAL_DOCUMENT` or `RETRIEVAL_QUERY`).
 - `decomposeQuery`: calls `gemini-2.5-flash` with JSON Schema structured output for `semanticQuery`, `exactFilters`, `requiresEditorialNotes`, `isGreetingOrSmallTalk`.
 - `generateSommelierResponse`: calls `gemini-2.5-flash` with `systemInstruction` (strict rule of source, factual price reporting) and `responseSchema` returning `{ reply: string, citedProductIds: string[] }`.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `bun test tests/catalog/gemini-ai-adapter.test.ts`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/domains/catalog/ports/rag-ai-gateway.port.ts src/domains/catalog/adapters/gemini-ai.adapter.ts tests/catalog/gemini-ai-adapter.test.ts
@@ -356,7 +356,7 @@ git commit -m "feat(catalog): implement Gemini AI adapter with gemini-embedding-
 - Consumes: `CatalogRepository`, `RagVectorStorePort`, `RagLexicalIndexPort`, `RagAiGatewayPort`
 - Produces: `generateSemanticChunks` function and `ProcessCatalogOutboxUseCase` worker loop
 
-- [ ] **Step 1: Write failing tests for Semantic Chunking and Ingestion**
+- [x] **Step 1: Write failing tests for Semantic Chunking and Ingestion**
 
 ```typescript
 // tests/catalog/semantic-chunker.test.ts & process-catalog-outbox.test.ts
@@ -368,12 +368,12 @@ git commit -m "feat(catalog): implement Gemini AI adapter with gemini-embedding-
 // - preserves existing chunks if Gemini embedding API fails (BDD Scenario 13)
 ```
 
-- [ ] **Step 2: Run tests to verify failure**
+- [x] **Step 2: Run tests to verify failure**
 
 Run: `bun test tests/catalog/semantic-chunker.test.ts tests/catalog/process-catalog-outbox.test.ts`
 Expected: FAIL
 
-- [ ] **Step 3: Implement `semantic-chunker.ts`, `ProcessCatalogOutboxUseCase`, and `catalog-ingestion.worker.ts`**
+- [x] **Step 3: Implement `semantic-chunker.ts`, `ProcessCatalogOutboxUseCase`, and `catalog-ingestion.worker.ts`**
 
 Implement semantic chunks with enriched natural language template.
 Implement `ProcessCatalogOutboxUseCase`:
@@ -383,12 +383,12 @@ Implement `ProcessCatalogOutboxUseCase`:
 - Generate embeddings first; then delete old chunks; then upsert to ChromaDB and SQLite FTS5; then mark `PROCESSED`.
 - Remove `.catch(() => null)` so failures cleanly bubble up and retry.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `bun test tests/catalog/semantic-chunker.test.ts tests/catalog/process-catalog-outbox.test.ts`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/domains/catalog/services/semantic-chunker.ts src/domains/catalog/use-cases/process-catalog-outbox.use-case.ts src/workers/catalog-ingestion.worker.ts tests/catalog/semantic-chunker.test.ts tests/catalog/process-catalog-outbox.test.ts
@@ -408,7 +408,7 @@ git commit -m "feat(catalog): implement semantic chunking and autonomous catalog
 - Consumes: PostgreSQL `products`, ChromaDB, SQLite FTS5
 - Produces: `ReconcileRagIndexesUseCase` executing 3-way differential audit
 
-- [ ] **Step 1: Write the failing test for 3-way reconciliation**
+- [x] **Step 1: Write the failing test for 3-way reconciliation**
 
 ```typescript
 // tests/catalog/reconcile-rag-indexes.test.ts
@@ -420,21 +420,21 @@ git commit -m "feat(catalog): implement semantic chunking and autonomous catalog
 // - in-place SQLite rebuild on structural error
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `bun test tests/catalog/reconcile-rag-indexes.test.ts`
 Expected: FAIL
 
-- [ ] **Step 3: Implement `ReconcileRagIndexesUseCase` and CLI script**
+- [x] **Step 3: Implement `ReconcileRagIndexesUseCase` and CLI script**
 
 Implement logic matching Section 10.3 of `spec09`. Add CLI script `src/cli/reconcile.ts` executable with `bun run rag:reconcile`.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `bun test tests/catalog/reconcile-rag-indexes.test.ts`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/domains/catalog/use-cases/reconcile-rag-indexes.use-case.ts src/cli/reconcile.ts tests/catalog/reconcile-rag-indexes.test.ts
@@ -453,7 +453,7 @@ git commit -m "feat(catalog): implement 3-way differential reconciliation and CL
 - Consumes: `RagVectorStorePort`, `RagLexicalIndexPort`, `RagAiGatewayPort`
 - Produces: `HybridSearchService.search(semanticQuery)` returning fused top-8 candidates
 
-- [ ] **Step 1: Write failing test for Hybrid Search & RRF**
+- [x] **Step 1: Write failing test for Hybrid Search & RRF**
 
 ```typescript
 // tests/catalog/hybrid-search.test.ts
@@ -464,21 +464,21 @@ git commit -m "feat(catalog): implement 3-way differential reconciliation and CL
 // - Deduplication and grouping by wine_id
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `bun test tests/catalog/hybrid-search.test.ts`
 Expected: FAIL
 
-- [ ] **Step 3: Implement `HybridSearchService`**
+- [x] **Step 3: Implement `HybridSearchService`**
 
 Implement concurrent retrieval with `Promise.allSettled`, RRF calculation $RRF(d) = \sum \frac{1}{60 + rank(d)}$, grouping by `productId`, and fallback tracking (`BM25_ONLY` / `CHROMA_ONLY`).
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `bun test tests/catalog/hybrid-search.test.ts`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/domains/catalog/services/hybrid-search.service.ts tests/catalog/hybrid-search.test.ts
@@ -500,7 +500,7 @@ git commit -m "feat(catalog): implement hybrid search with reciprocal rank fusio
 - Consumes: `HybridSearchService`, `RagAiGatewayPort`, PostgreSQL connection
 - Produces: `POST /api/chat` handler and endpoint
 
-- [ ] **Step 1: Write failing tests for Chat Orchestrator & Grounding Check**
+- [x] **Step 1: Write failing tests for Chat Orchestrator & Grounding Check**
 
 ```typescript
 // tests/catalog/chat-orchestrator.test.ts
@@ -512,22 +512,22 @@ git commit -m "feat(catalog): implement hybrid search with reciprocal rank fusio
 // - Mini Cards assembled 100% from PostgreSQL
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `bun test tests/catalog/chat-orchestrator.test.ts`
 Expected: FAIL
 
-- [ ] **Step 3: Implement `ChatOrchestratorUseCase` and route in `catalog.handlers.ts` / `src/index.ts`**
+- [x] **Step 3: Implement `ChatOrchestratorUseCase` and route in `catalog.handlers.ts` / `src/index.ts`**
 
 Implement complete consumption pipeline according to Section 8 of `spec09`.
 Add `/api/chat` routing to `src/index.ts`.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `bun test tests/catalog/chat-orchestrator.test.ts tests/catalog/chat-api.test.ts`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/domains/catalog/use-cases/chat-orchestrator.use-case.ts src/domains/catalog/catalog.handlers.ts src/index.ts tests/catalog/chat-orchestrator.test.ts tests/catalog/chat-api.test.ts
@@ -548,19 +548,19 @@ git commit -m "feat(catalog): implement chat orchestrator with truth funnel, gro
 - Consumes: `POST /api/chat`, `POST /api/cart`
 - Produces: Floating Action Button (bottom-right) and flyout conversation drawer with wine mini cards
 
-- [ ] **Step 1: Write test for ChatDrawer component structure and interaction**
+- [x] **Step 1: Write test for ChatDrawer component structure and interaction**
 
 ```typescript
 // tests/catalog/chat-drawer-component.test.ts
 // Verify ChatDrawer component exports, states, mini card direct cart add callback
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `bun test tests/catalog/chat-drawer-component.test.ts`
 Expected: FAIL
 
-- [ ] **Step 3: Implement `ChatDrawer.tsx`, integrate into `App.tsx`, and add CSS styles**
+- [x] **Step 3: Implement `ChatDrawer.tsx`, integrate into `App.tsx`, and add CSS styles**
 
 - Floating action button at `bottom: 24px; right: 24px; z-index: 1000`.
 - Drawer panel with header (avatar, status 'online', minimize).
@@ -568,13 +568,13 @@ Expected: FAIL
 - Wine Mini Cards with direct `+ Adicionar ao Carrinho` button invoking `fetch('/api/cart')` and updating cart counter without page reload (BDD Scenario 6).
 - Session storage dialogue persistence.
 
-- [ ] **Step 4: Run test to verify it passes and verify frontend compilation**
+- [x] **Step 4: Run test to verify it passes and verify frontend compilation**
 
 Run: `bun test tests/catalog/chat-drawer-component.test.ts`
 Run: `bun run src/index.ts` (verification of `Bun.build` frontend compilation)
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/web/components/ChatDrawer.tsx src/web/App.tsx src/web/index.css tests/catalog/chat-drawer-component.test.ts
@@ -592,7 +592,7 @@ git commit -m "feat(ui): implement floating chat drawer with Crisp-inspired UX a
 - Consumes: All `spec09` components
 - Produces: Automated verification suite covering all 13 BDD scenarios from `spec09`
 
-- [ ] **Step 1: Write executable tests for all 13 BDD scenarios**
+- [x] **Step 1: Write executable tests for all 13 BDD scenarios**
 
 Cover:
 - Scenario 1: Dual version guard idempotence
@@ -609,17 +609,17 @@ Cover:
 - Scenario 12: 18-second global deadline exhaustion
 - Scenario 13: Index preservation on Gemini embedding API failure
 
-- [ ] **Step 2: Run BDD scenario suite**
+- [x] **Step 2: Run BDD scenario suite**
 
 Run: `bun test tests/catalog/spec09-bdd-scenarios.test.ts`
 Expected: PASS 13/13 scenarios
 
-- [ ] **Step 3: Run entire project test suite for full regression check**
+- [x] **Step 3: Run entire project test suite for full regression check**
 
 Run: `bun test`
 Expected: ALL tests pass (85+ pass, 0 fail)
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add tests/catalog/spec09-bdd-scenarios.test.ts
