@@ -75,7 +75,12 @@ describe('GeminiAiAdapter (spec09 §6.3 & §8.5)', () => {
       },
     };
 
-    const adapter = new GeminiAiAdapter({ apiKey: 'test-api-key', client: fakeClient as any });
+    const adapter = new GeminiAiAdapter({
+      apiKey: 'test-api-key',
+      client: fakeClient as any,
+      openRouterApiKey: '',
+      retryBackoffMs: 1,
+    });
     
     const r1 = await adapter.decomposeQuery('o que você pode fazer?');
     expect(r1.isGreetingOrSmallTalk).toBe(true);
@@ -155,5 +160,191 @@ describe('GeminiAiAdapter (spec09 §6.3 & §8.5)', () => {
 
     expect(response.reply).toContain('Serra Malbec');
     expect(response.citedProductIds).toEqual(['prod-malbec-1']);
+  });
+
+  it('should retry 3 times on Google Gemini error and fallback to OpenRouter free models for decomposeQuery', async () => {
+    let googleAttempts = 0;
+    const fakeClient = {
+      models: {
+        generateContent: mock(async () => {
+          googleAttempts++;
+          throw new Error('Google Gemini rate limit 429');
+        }),
+      },
+    };
+
+    let openRouterCalled = false;
+    let openRouterBody: any = null;
+    const mockOpenRouterFetch = mock(async (url: string | URL | Request, init?: RequestInit) => {
+      openRouterCalled = true;
+      openRouterBody = JSON.parse(init?.body as string);
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                role: 'assistant',
+                content: JSON.stringify({
+                  semanticQuery: 'vinho tinto encorpado',
+                  exactFilters: { category: 'Tinto', maxPrice: 120 },
+                  requiresEditorialNotes: false,
+                  isGreetingOrSmallTalk: false,
+                }),
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    });
+
+    const adapter = new GeminiAiAdapter({
+      apiKey: 'test-api-key',
+      client: fakeClient as any,
+      openRouterApiKey: 'test-openrouter-key',
+      openRouterModel: 'openrouter/free',
+      openRouterFetch: mockOpenRouterFetch as any,
+      retryBackoffMs: 1,
+    });
+
+    const result = await adapter.decomposeQuery('Quero um tinto até 120');
+
+    expect(googleAttempts).toBe(4); // 1 inicial + 3 retries
+    expect(openRouterCalled).toBe(true);
+    expect(openRouterBody.model).toBe('openrouter/free');
+    expect(openRouterBody.models).toContain('openrouter/free');
+    expect(result.semanticQuery).toBe('vinho tinto encorpado');
+    expect(result.exactFilters.category).toBe('Tinto');
+    expect(result.exactFilters.maxPrice).toBe(120);
+  });
+
+  it('should retry 3 times on Google Gemini error and fallback to OpenRouter free models for generateSommelierResponse', async () => {
+    let googleAttempts = 0;
+    const fakeClient = {
+      models: {
+        generateContent: mock(async () => {
+          googleAttempts++;
+          throw new Error('Google Gemini quota exceeded');
+        }),
+      },
+    };
+
+    let openRouterCalled = false;
+    const mockOpenRouterFetch = mock(async (url: string | URL | Request, init?: RequestInit) => {
+      openRouterCalled = true;
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                role: 'assistant',
+                content: JSON.stringify({
+                  reply: 'Resposta servida com maestria pelo fallback do OpenRouter.',
+                  citedProductIds: ['prod-or-1'],
+                }),
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    });
+
+    const adapter = new GeminiAiAdapter({
+      apiKey: 'test-api-key',
+      client: fakeClient as any,
+      openRouterApiKey: 'test-openrouter-key',
+      openRouterFetch: mockOpenRouterFetch as any,
+      retryBackoffMs: 1,
+    });
+
+    const response = await adapter.generateSommelierResponse({
+      systemInstruction: 'Você é um sommelier...',
+      userQuery: 'Recomende um vinho',
+      history: [],
+      ragContext: 'Contexto dos vinhos',
+    });
+
+    expect(googleAttempts).toBe(4); // 1 inicial + 3 retries
+    expect(openRouterCalled).toBe(true);
+    expect(response.reply).toContain('fallback do OpenRouter');
+    expect(response.citedProductIds).toEqual(['prod-or-1']);
+  });
+
+  it('should succeed if Google Gemini recovers on a retry before reaching OpenRouter', async () => {
+    let googleAttempts = 0;
+    const fakeClient = {
+      models: {
+        generateContent: mock(async () => {
+          googleAttempts++;
+          if (googleAttempts < 3) {
+            throw new Error('Temporary 503');
+          }
+          return {
+            text: JSON.stringify({
+              reply: 'Recuperado com sucesso no segundo retry da Google API.',
+              citedProductIds: [],
+            }),
+          };
+        }),
+      },
+    };
+
+    let openRouterCalled = false;
+    const mockOpenRouterFetch = mock(async () => {
+      openRouterCalled = true;
+      return new Response('{}', { status: 200 });
+    });
+
+    const adapter = new GeminiAiAdapter({
+      apiKey: 'test-api-key',
+      client: fakeClient as any,
+      openRouterApiKey: 'test-openrouter-key',
+      openRouterFetch: mockOpenRouterFetch as any,
+      retryBackoffMs: 1,
+    });
+
+    const response = await adapter.generateSommelierResponse({
+      systemInstruction: 'Instrução...',
+      userQuery: 'Olá',
+      history: [],
+      ragContext: '',
+    });
+
+    expect(googleAttempts).toBe(3); // Inicial (1) + retry 1 (2) + retry 2 (3, sucesso)
+    expect(openRouterCalled).toBe(false);
+    expect(response.reply).toContain('segundo retry da Google API');
+  });
+
+  it('should degrade gracefully to local heuristic if both Google (after 3 retries) and OpenRouter fail', async () => {
+    const fakeClient = {
+      models: {
+        generateContent: mock(async () => {
+          throw new Error('Google down');
+        }),
+      },
+    };
+
+    const mockOpenRouterFetch = mock(async () => {
+      throw new Error('OpenRouter network down');
+    });
+
+    const adapter = new GeminiAiAdapter({
+      apiKey: 'test-api-key',
+      client: fakeClient as any,
+      openRouterApiKey: 'test-openrouter-key',
+      openRouterFetch: mockOpenRouterFetch as any,
+      retryBackoffMs: 1,
+    });
+
+    const response = await adapter.generateSommelierResponse({
+      systemInstruction: 'Instrução...',
+      userQuery: 'Olá',
+      history: [],
+      ragContext: '',
+    });
+
+    expect(response.reply).toContain('Sommelier Virtual da Origem Vinhos');
+    expect(response.citedProductIds).toEqual([]);
   });
 });
