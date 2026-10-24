@@ -277,11 +277,11 @@ Esta especificação **não contempla**:
 
 ## 11. Impactos em Outras Funcionalidades
 
-1. **Documento [prd_v1.md](file:///c:/Users/Jo%C3%A3o%20Otavio%20Gamer/Desktop/Projetos%20Antigravity/Origem%20Vinhos/docs/prd_v1.md):** 
+1. **Documento [prd_v1.md](../prd_v1.md):** 
    * Expansão do escopo da V1 para contemplar o Cadastro de Endereços e a etapa inicial de pré-requisitos do Checkout.
-2. **Especificação [spec01-CRUD-User.md](file:///c:/Users/Jo%C3%A3o%20Otavio%20Gamer/Desktop/Projetos%20Antigravity/Origem%20Vinhos/docs/specs/spec01-CRUD-User.md):**
+2. **Especificação [spec01-CRUD-User.md](./spec01-CRUD-User.md):**
    * Adição da associação de 1:N com a entidade `Address` e adição de seção de gestão de endereços no perfil do usuário.
-3. **Especificação [spec03-CRUD-Carrinho.md](file:///c:/Users/Jo%C3%A3o%20Otavio%20Gamer/Desktop/Projetos%20Antigravity/Origem%20Vinhos/docs/specs/spec03-CRUD-Carrinho.md):**
+3. **Especificação [spec03-CRUD-Carrinho.md](./spec03-CRUD-Carrinho.md):**
    * Adição do elemento de ação "Finalizar Compra" no Carrinho e a regra de transição com verificação de endereço cadastrado.
 
 ---

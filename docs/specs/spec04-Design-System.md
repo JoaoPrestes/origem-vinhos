@@ -290,7 +290,7 @@ Para garantir o padrão de alta gastronomia e sofisticação das imagens geradas
 
 Após a aprovação desta especificação pelo usuário, a refatoração visual será executada na seguinte sequência:
 
-1. **Configurar Tokens em 3 Camadas:** Atualizar [index.css](file:///c:/Users/Jo%C3%A3o%20Otavio%20Gamer/Desktop/Projetos%20Antigravity/Origem%20Vinhos/src/web/index.css) com os Tiers 1, 2 e 3.
+1. **Configurar Tokens em 3 Camadas:** Atualizar [index.css](../../src/web/index.css) com os Tiers 1, 2 e 3.
 2. **Importar Tipografia Editorial:** Integrar fontes *Playfair Display* e *Inter*.
 3. **Padronizar Layout & Container Grid:** Aplicar grid de 12 colunas e margens responsivas.
 4. **Implementar Utilitários de Elevação & Sombra:** Configurar sombras e glassmorphism.
