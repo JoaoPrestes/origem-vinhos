@@ -17,7 +17,7 @@ export class DrizzleReconcileDbAdapter implements ReconcileDbPort {
 
   async getAllActiveProducts(): Promise<any[]> {
     const rows = await this.sqlClient`
-      SELECT * FROM products WHERE (status = 'ACTIVE' OR status IS NULL) AND deleted_at IS NULL;
+      SELECT * FROM products WHERE deleted_at IS NULL;
     `;
     return rows;
   }
