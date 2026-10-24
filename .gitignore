@@ -18,7 +18,7 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # dotenv environment variable files
 .env
 .env.*
-!.env.example
+.env.example
 
 # caches & agents
 .eslintcache
