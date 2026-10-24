@@ -20,6 +20,10 @@ export class UpdateProductUseCase {
     if (parsedData.country) updateData.country = parsedData.country;
     if (parsedData.harvest) updateData.harvest = parsedData.harvest;
     if (parsedData.alcohol !== undefined) updateData.alcohol = parsedData.alcohol.toFixed(2);
+    if (parsedData.stock !== undefined) updateData.stock = parsedData.stock;
+    if (parsedData.sensory_profile !== undefined) updateData.sensory_profile = parsedData.sensory_profile;
+    if (parsedData.pairing !== undefined) updateData.pairing = parsedData.pairing;
+    if (parsedData.harvest_notes !== undefined) updateData.harvest_notes = parsedData.harvest_notes;
 
     return await this.catalogRepository.update(id, updateData);
   }

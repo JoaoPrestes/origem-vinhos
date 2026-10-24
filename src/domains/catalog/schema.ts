@@ -18,6 +18,14 @@ export const createProductSchema = z.object({
     (val) => (typeof val === 'string' ? parseFloat(val) : val),
     z.number().positive('O teor alcoólico deve ser maior que zero.')
   ),
+  stock: z.preprocess(
+    (val) => (val === undefined || val === null ? 0 : typeof val === 'string' ? parseInt(val, 10) : val),
+    z.number().int().min(0, 'O estoque não pode ser negativo.').default(0)
+  ),
+  sensory_profile: z.string().nullable().optional(),
+  pairing: z.string().nullable().optional(),
+  harvest_notes: z.string().nullable().optional(),
 });
 
 export const updateProductSchema = createProductSchema.partial();
+

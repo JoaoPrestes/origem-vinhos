@@ -20,6 +20,10 @@ export class CreateProductUseCase {
       country: parsedData.country,
       harvest: parsedData.harvest,
       alcohol: parsedData.alcohol.toFixed(2),
+      stock: parsedData.stock ?? 0,
+      sensory_profile: parsedData.sensory_profile ?? null,
+      pairing: parsedData.pairing ?? null,
+      harvest_notes: parsedData.harvest_notes ?? null,
     });
   }
 }
