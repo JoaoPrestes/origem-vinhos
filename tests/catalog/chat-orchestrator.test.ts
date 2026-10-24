@@ -68,15 +68,62 @@ describe('ChatOrchestratorUseCase (spec09 §8, §10 & BDD Scenarios 3, 9, 12)', 
       requiresEditorialNotes: false,
       isGreetingOrSmallTalk: true,
     }));
+    mockAiGateway.generateSommelierResponse = mock(async () => ({
+      reply: 'Olá! Sou seu Sommelier Virtual. Em que posso auxiliá-lo hoje?',
+      citedProductIds: [],
+    }));
 
     const response = await useCase.execute({
       message: 'Olá, boa tarde! <script>alert("hack")</script>',
       history: [],
     });
 
-    expect(response.reply).toBeDefined();
+    expect(response.reply).toContain('Sommelier Virtual');
     expect(response.recommendedProducts).toHaveLength(0);
     expect(mockHybridSearch.search).not.toHaveBeenCalled();
+    expect(mockAiGateway.generateSommelierResponse).toHaveBeenCalled();
+  });
+
+  it('should handle conversational queries ("o que você pode fazer?") fluidly without returning mini cards', async () => {
+    mockAiGateway.decomposeQuery = mock(async () => ({
+      semanticQuery: '',
+      exactFilters: {},
+      requiresEditorialNotes: false,
+      isGreetingOrSmallTalk: true,
+    }));
+    mockAiGateway.generateSommelierResponse = mock(async () => ({
+      reply: 'Olá! Como seu Sommelier Virtual, posso tirar dúvidas sobre uvas, sugerir harmonizações e encontrar vinhos da adega. O que gostaria de explorar?',
+      citedProductIds: [],
+    }));
+
+    const response = await useCase.execute({
+      message: 'o que você pode fazer?',
+      history: [],
+    });
+
+    expect(response.reply).toContain('Sommelier Virtual');
+    expect(response.recommendedProducts).toHaveLength(0);
+    expect(mockHybridSearch.search).not.toHaveBeenCalled();
+  });
+
+  it('should NOT return mini cards when Sommelier does not cite any product in citedProductIds (Ponto 4)', async () => {
+    mockAiGateway.decomposeQuery = mock(async () => ({
+      semanticQuery: 'vinho',
+      exactFilters: {},
+      requiresEditorialNotes: false,
+      isGreetingOrSmallTalk: false,
+    }));
+    mockAiGateway.generateSommelierResponse = mock(async () => ({
+      reply: 'Temos excelentes opções em nossa adega, mas você prefere tintos ou brancos?',
+      citedProductIds: [],
+    }));
+
+    const response = await useCase.execute({
+      message: 'vocês têm vinhos?',
+    });
+
+    expect(response.reply).toContain('você prefere tintos ou brancos?');
+    expect(response.recommendedProducts).toHaveLength(0);
   });
 
   it('Funil da Verdade: discards products with stock = 0 or price > maxPrice (BDD Cenário 3)', async () => {

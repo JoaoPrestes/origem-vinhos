@@ -36,7 +36,7 @@ describe('GeminiAiAdapter (spec09 §6.3 & §8.5)', () => {
 
   it('should decompose user queries into structured filters and semantic search', async () => {
     const mockGenerateContent = mock(async ({ model, contents, config }: any) => {
-      expect(model).toBe('gemini-3.8-flash');
+      expect(model).toBe(adapter.chatModel);
       expect(config.responseMimeType).toBe('application/json');
       return {
         text: JSON.stringify({
@@ -66,9 +66,71 @@ describe('GeminiAiAdapter (spec09 §6.3 & §8.5)', () => {
     expect(result.isGreetingOrSmallTalk).toBe(false);
   });
 
+  it('should classify "o que você pode fazer?" and greetings as isGreetingOrSmallTalk in heuristic fallback', async () => {
+    const fakeClient = {
+      models: {
+        generateContent: mock(async () => {
+          throw new Error('API connection failure');
+        }),
+      },
+    };
+
+    const adapter = new GeminiAiAdapter({ apiKey: 'test-api-key', client: fakeClient as any });
+    
+    const r1 = await adapter.decomposeQuery('o que você pode fazer?');
+    expect(r1.isGreetingOrSmallTalk).toBe(true);
+    expect(r1.semanticQuery).toBe('');
+
+    const r2 = await adapter.decomposeQuery('olá, boa tarde');
+    expect(r2.isGreetingOrSmallTalk).toBe(true);
+
+    const r3 = await adapter.decomposeQuery('o que é tanino?');
+    expect(r3.isGreetingOrSmallTalk).toBe(true);
+  });
+
+  it('should fallback to gemini-3-flash-preview when configured model returns 404', async () => {
+    let callCount = 0;
+    const mockGenerateContent = mock(async ({ model }: any) => {
+      callCount++;
+      if (callCount === 1) {
+        const err: any = new Error('Model not found');
+        err.status = 404;
+        throw err;
+      }
+      return {
+        text: JSON.stringify({
+          reply: 'Resposta recuperada via modelo fallback estável.',
+          citedProductIds: [],
+        }),
+      };
+    });
+
+    const fakeClient = {
+      models: {
+        generateContent: mockGenerateContent,
+      },
+    };
+
+    const adapter = new GeminiAiAdapter({
+      apiKey: 'test-api-key',
+      chatModel: 'gemini-2.5-flash',
+      client: fakeClient as any,
+    });
+
+    const response = await adapter.generateSommelierResponse({
+      systemInstruction: 'Instrução...',
+      userQuery: 'Olá',
+      history: [],
+      ragContext: '',
+    });
+
+    expect(response.reply).toContain('fallback estável');
+    expect(mockGenerateContent).toHaveBeenCalledTimes(2);
+  });
+
   it('should generate sommelier response with cited product IDs', async () => {
     const mockGenerateContent = mock(async ({ model, contents, config }: any) => {
-      expect(model).toBe('gemini-3.8-flash');
+      expect(model).toBe(adapter.chatModel);
       return {
         text: JSON.stringify({
           reply: 'Recomendo o Serra Malbec 2018 pelo seu perfil encorpado.',
