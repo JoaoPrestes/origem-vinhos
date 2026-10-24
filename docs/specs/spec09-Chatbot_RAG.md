@@ -16,8 +16,8 @@ Esta especificação consolida a integração entre:
 5. **SQLite FTS5 Local:** Motor lexical dedicado em disco operado nativamente via `bun:sqlite` para cálculo do algoritmo **BM25**, com tokenização `unicode61`, expansão de prefixos para português e concorrência segura em modo WAL;
 6. **Reciprocal Rank Fusion (RRF):** Algoritmo matemático para unificação de rankings denso e lexical com deduplicação por rótulo;
 7. **Funil da Verdade:** Reconferência transacional obrigatória no PostgreSQL em tempo real para blindagem de preço e estoque antes da geração da resposta;
-8. **Google Gemini API:** Embeddings com `text-embedding-004` (768 dimensões com tarefas assimétricas `RETRIEVAL_DOCUMENT` e `RETRIEVAL_QUERY`) e geração com `gemini-2.5-flash` / `gemini-2.5-flash-lite` utilizando o parâmetro nativo `systemInstruction`;
-9. **Filtro Programático Pós-Geração (*Post-Generation Grounding Check*):** Validador determinístico no backend que audita o retorno do LLM, expurga menções a produtos não verificados e monta os Mini Cards estritamente a partir dos dados do PostgreSQL;
+8. **Google Gemini API:** Embeddings com `gemini-embedding-001` (configurado via parâmetro `outputDimensionality: 768`, parametrizável via variável de ambiente `GEMINI_EMBEDDING_MODEL`, e com tarefas assimétricas `RETRIEVAL_DOCUMENT` e `RETRIEVAL_QUERY`) e geração com `gemini-2.5-flash` / `gemini-2.5-flash-lite` utilizando o parâmetro nativo `systemInstruction`;
+9. **Filtro Programático Pós-Geração (*Post-Generation Grounding Check*):** Validador determinístico no backend que audita o retorno estruturado do LLM, expurga menções a produtos não verificados, intercepta discrepâncias monetárias via Regex e monta os Mini Cards estritamente a partir dos dados do PostgreSQL;
 10. **Floating Chat Drawer:** Widget flutuante global no frontend inspirado na ergonomia e fluidez do Crisp, integrado ao Design System da Origem Vinhos, com respostas ricas contendo Mini Cards de Vinho com botão direto "Adicionar ao Carrinho".
 
 ---
@@ -28,21 +28,22 @@ Esta especificação consolida a integração entre:
 * **Evolução do Schema no PostgreSQL:** Expansão atômica da tabela `products` com colunas de controle de estoque (`stock`), versionamento monotônico (`version`) e atributos de sommelier (`sensory_profile`, `pairing`, `harvest_notes`).
 * **Baixa Realista de Estoque Compatível com `spec08`:** Decremento de unidades de estoque como efeito colateral seguro da confirmação de pagamento do pedido (`ProcessPaymentConfirmedUseCase`), preservando a integridade das transações financeiras sem abortar pedidos já liquidados.
 * **Esteira de Ingestão Assíncrona com Reivindicação Concorrente:** Tabela `catalog_outbox` alimentada na mesma transação atômica do CRUD do produto, consumida por um Worker autônomo em processo separado (`bun run worker`) utilizando `FOR UPDATE SKIP LOCKED` e expiração de locks (*lease timeout* de 5 minutos).
-* **Segmentação Semântica Dinâmica (Chunking Justificado):** Geração de até 3 chunks semânticos por rótulo (`identidade`, `sensorial`, `harmonizacao`) com IDs determinísticos e descarte de campos vazios para evitar ruído vetorial.
-* **Prevenção Ativa de Chunks Órfãos e Sincronização Dual:** Exclusão preventiva de todos os IDs de chunks do produto no ChromaDB e no SQLite FTS5 antes do upsert dos chunks ativos. Um evento só é marcado como processado após a confirmação bem-sucedida em **ambos** os índices.
+* **Segmentação Semântica Dinâmica (Chunking Justificado):** Geração de até 3 chunks semânticos por rótulo (`identidade`, `sensorial`, `harmonizacao`) com frases em linguagem natural rica, IDs determinísticos e descarte de campos vazios para evitar ruído vetorial.
+* **Prevenção Ativa de Chunks Órfãos e Sincronização Dual:** Inversão da ordem de ingestão calculando embeddings antes de executar a limpeza preventiva, garantindo continuidade nas buscas sem "buracos" no catálogo. Um evento só é marcado como processado após a confirmação bem-sucedida em **ambos** os índices.
 * **Armazenamento Híbrido Independente:**
   * Vetores densos (768 dimensões) persistidos no ChromaDB oficial via Docker Compose (porta 8000).
   * Vetores esparsos/lexicais mantidos em banco SQLite local com tabela virtual FTS5 (`bun:sqlite`), operando em modo WAL (*Write-Ahead Logging*).
 * **Esteira de Consumo em Tempo Real:** Endpoint `POST /api/chat` executando sob um **Deadline Global Rígido de 18 segundos**:
+  * Sanitização de entrada e validação restrita do histórico recente (`untrusted input`).
   * Decomposição estruturada da pergunta via Gemini Flash (separando intenção aberta, filtros exatos e pedidos editoriais).
   * Busca híbrida concorrente (ChromaDB com `RETRIEVAL_QUERY` + SQLite FTS5 BM25 com prefixos para PT-BR).
   * Fusão por RRF ($k=60$) e agrupamento por `wine_id`.
   * Funil da Verdade no PostgreSQL com estratégia de *over-fetching* (Top 8 candidatos $\rightarrow$ validação de estoque $> 0$ e preço $\rightarrow$ Top 3 evidências).
   * Blindagem de prompt com sanitização de entrada (escape de caracteres XML), uso do campo nativo `systemInstruction` da API e diretrizes anti-injeção.
-  * Geração da resposta do Sommelier citando evidências ("Recibo").
-  * Verificação programática pós-geração (*Grounding Check*) e montagem soberana dos Mini Cards diretamente pelo backend via PostgreSQL.
+  * Geração da resposta do Sommelier via `responseSchema` estruturado (`{ reply, citedProductIds }`).
+  * Verificação programática pós-geração (*Grounding Check* com auditoria monetária por Regex) e montagem soberana dos Mini Cards diretamente pelo backend via PostgreSQL.
 * **Interface do Usuário (Frontend):** Floating Chat Drawer global no canto inferior direito, com retenção de sessão, suporte a mensagens consecutivas (*multi-turn*), sugestões rápidas de início e Mini Cards de Vinho interativos.
-* **Resiliência e Tolerância a Falhas:** Fallback cruzado entre índices (ChromaDB $\leftrightarrow$ BM25), timeouts hierárquicos vinculados ao deadline global via `AbortSignal`, retentativas com jitter e reconciliação diferencial automática de 3 vias (*3-Way Catch-Up Loop*).
+* **Resiliência e Tolerância a Falhas:** Fallback cruzado entre índices (ChromaDB $\leftrightarrow$ BM25), timeouts hierárquicos vinculados ao deadline global via `AbortSignal`, retentativas com jitter e reconciliação diferencial automática de 3 vias (*3-Way Catch-Up Loop* com recuperação in-place do SQLite).
 * **Observabilidade:** Logs estruturados em formato JSON real com telemetria de latência por estágio, mascaramento de dados sensíveis (PII) e métricas de qualidade.
 
 ### 2.2 O que NÃO contempla (Fora de Escopo)
@@ -59,14 +60,14 @@ Esta especificação consolida a integração entre:
 * **SSOT (Single Source of Truth):** O PostgreSQL é a única fonte definitiva para estoque, preço, status de ativação e versão do vinho.
 * **Chunk Semântico:** Trecho de texto delimitado por assunto específico da ficha técnica (dados de safra, paladar ou harmonização), evitando a mistura de tópicos em um mesmo vetor.
 * **ID Determinístico:** Identificador imutável no formato `${productId}_${chunkType}` garantindo que upserts e deleções nos índices sejam 100% idempotentes.
-* **Asymmetric Embeddings:** Uso de tarefas especializadas no modelo `text-embedding-004`: `RETRIEVAL_DOCUMENT` para indexar chunks no catálogo e `RETRIEVAL_QUERY` para vetorizar a busca do cliente.
+* **Asymmetric Embeddings:** Uso de tarefas especializadas no modelo `gemini-embedding-001` (com `outputDimensionality: 768` e parametrizável via `GEMINI_EMBEDDING_MODEL`): `RETRIEVAL_DOCUMENT` para indexar chunks no catálogo e `RETRIEVAL_QUERY` para vetorizar a busca do cliente.
 * **BM25 com Expansão de Prefixo:** Algoritmo probabilístico de recuperação de termos no SQLite FTS5, complementado por sufixação com asterisco (`termo*`) para termos $\ge 4$ caracteres a fim de contemplar flexões de gênero e número em português.
 * **RRF (Reciprocal Rank Fusion):** Algoritmo de classificação que combina listas de resultados de diferentes motores baseando-se na posição do ranking, evitando discrepâncias de escalas entre notas de cosseno e notas BM25:
   $$\text{Score}(d) = \sum_{m \in \{\text{dense}, \text{bm25}\}} \frac{1}{60 + \text{rank}_m(d)}$$
 * **Funil da Verdade:** Filtro transacional síncrono executado no PostgreSQL sobre os candidatos recuperados pelo RRF antes de montar o prompt para a IA.
 * **Regra da Fonte ou Silêncio:** Diretriz estrita do prompt que proíbe o LLM de preencher lacunas com dados inventados. Se o catálogo não contiver a informação de safra ou harmonização, o modelo deve afirmar explicitamente o desconhecimento.
 * **Soberania Comercial dos Mini Cards:** Regra arquitetural que determina que os cards de vinho (nome, safra, uva, preço, estoque e botão de compra) são montados exclusivamente a partir dos dados do PostgreSQL verificados pelo backend, nunca a partir de valores extraídos do texto gerado pelo LLM.
-* **Post-Generation Grounding Check:** Validador programático no backend que audita o retorno do LLM e descarta qualquer referência a vinhos que não constavam nas evidências enviadas.
+* **Post-Generation Grounding Check:** Validador programático no backend que audita o retorno estruturado do LLM, descarta IDs alucinados e intercepta divergências de preços no texto via Regex.
 * **Wal Mode (Write-Ahead Logging):** Modo de operação do SQLite que permite leituras simultâneas concorrentes enquanto o processo do Worker executa escritas atômicas em disco.
 * **SKIP LOCKED:** Cláusula SQL de alta concorrência que permite que workers múltiplos reivindiquem registros pendentes da outbox sem bloquear uns aos outros.
 
@@ -78,9 +79,9 @@ Esta especificação consolida a integração entre:
 | :--- | :--- | :--- |
 | **Visitante / Cliente** | Usuário Anônimo ou Autenticado | Interage com o Sommelier Virtual pelo Floating Chat Drawer. Sujeito a rate limiting de **6 requisições por minuto por IP/Sessão** e limite máximo de **500 caracteres por mensagem**. Não possui acesso direto aos bancos vetoriais ou chaves de API. |
 | **Administrador** | Usuário (`Admin`) | Cria, atualiza e remove vinhos pelo CRUD do catálogo, definindo preço, estoque inicial e notas de sommelier. Gera eventos atômicos na `catalog_outbox`. |
-| **Worker de Ingestão** | Processo CLI (`rag-worker`) | Processo autônomo rodando sob Bun. Reivindica eventos via `FOR UPDATE SKIP LOCKED`, calcula embeddings na API Gemini, atualiza o ChromaDB e o SQLite FTS5 com confirmação dual, garantindo versionamento monotônico e eliminação de órfãos. |
-| **Backend Orquestrador** | Servidor HTTP Bun (`/api/chat`) | Recebe mensagens do chat, sanitiza entradas, orquestra chamadas concorrentes sob deadline global de 18s ao ChromaDB e SQLite FTS5, aplica o Funil da Verdade no PostgreSQL, audita evidências pós-geração e monta os Mini Cards verificados. |
-| **API Gemini (Google AI Studio)** | Serviço Externo de IA | Executa vetorização (`text-embedding-004`) e geração textual (`gemini-2.5-flash`). Chave de API mantida estritamente nas variáveis de ambiente do backend/worker (`GEMINI_API_KEY`), nunca exposta ao frontend. Modelo opera sem ferramentas (*tools*) de escrita para blindagem de segurança. |
+| **Worker de Ingestão** | Processo CLI (`rag-worker`) | Processo autônomo rodando sob Bun. Reivindica eventos via `FOR UPDATE SKIP LOCKED`, calcula embeddings na API Gemini, atualiza o ChromaDB e o SQLite FTS5 com confirmação dual, garantindo versionamento monotônico e eliminação de órfãos sem interrupção de busca. |
+| **Backend Orquestrador** | Servidor HTTP Bun (`/api/chat`) | Recebe mensagens do chat, sanitiza entradas e histórico, orquestra chamadas concorrentes sob deadline global de 18s ao ChromaDB e SQLite FTS5, aplica o Funil da Verdade no PostgreSQL, audita evidências e valores monetários pós-geração e monta os Mini Cards verificados. |
+| **API Gemini (Google AI Studio)** | Serviço Externo de IA | Executa vetorização (`gemini-embedding-001` com `outputDimensionality: 768`) e geração textual (`gemini-2.5-flash`). Chave de API mantida estritamente nas variáveis de ambiente do backend/worker (`GEMINI_API_KEY`), nunca exposta ao frontend. Modelo opera sem ferramentas (*tools*) de escrita para blindagem de segurança. |
 
 ---
 
@@ -105,7 +106,7 @@ flowchart TD
     subgraph S_INGESTION["3. Esteira de Ingestão (Assíncrona)"]
         WORKER["Worker CLI de Ingestão<br><i>(bun run worker)</i>"]
         COALESCE["Coalescência & Version Guard"]
-        GEMINI_EMB["Gemini text-embedding-004<br><i>(TaskType: RETRIEVAL_DOCUMENT)</i>"]
+        GEMINI_EMB["Gemini gemini-embedding-001 (768d)<br><i>(TaskType: RETRIEVAL_DOCUMENT)</i>"]
         CONFIRM["Confirmação Dual de Índices<br><i>(ChromaDB + SQLite FTS5)</i>"]
     end
 
@@ -116,14 +117,14 @@ flowchart TD
 
     subgraph S_CONSUMPTION["5. Esteira de Consumo (Tempo Real - Deadline 18s)"]
         CLIENT["Navegador do Cliente<br><i>(Floating Chat Drawer)</i>"]
-        SANITIZE["Sanitização & Escape XML<br><i>(Max 500 chars)</i>"]
+        SANITIZE["Sanitização & Escape XML<br><i>(Max 500 chars / Truncate 4 turns)</i>"]
         ORCH["Orquestrador /api/chat<br><i>(Bun HTTP Server com AbortController)</i>"]
         DECOMP["Decomposição Estruturada<br><i>(Gemini Flash - JSON Schema)</i>"]
         HYBRID["Busca Híbrida Paralela com Fallback"]
         RRF["Fusão RRF (k=60) & Deduplicação"]
         GATE["Funil da Verdade<br><i>(Reconferência Transacional PostgreSQL)</i>"]
-        LLM["Geração Sommelier com Recibo<br><i>(Gemini Flash com systemInstruction)</i>"]
-        VERIFY["Post-Generation Grounding Check<br><i>(Auditoria Determinística de IDs)</i>"]
+        LLM["Geração Sommelier Estruturada<br><i>(Gemini Flash com responseSchema)</i>"]
+        VERIFY["Post-Generation Grounding Check<br><i>(Auditoria de IDs + Regex de Preços)</i>"]
         CARDS["Montagem Soberana de Mini Cards<br><i>(Dados 100% PostgreSQL)</i>"]
     end
 
@@ -156,8 +157,8 @@ flowchart TD
     PG_PROD -->|Itens em Estoque e Preço Real| GATE
     GATE -->|Top 3 Evidências Verificadas| LLM
     GATE -->|Dados Reais dos Produtos| CARDS
-    LLM -->|Resposta em Rascunho| VERIFY
-    VERIFY -->|Descarta Alucinações de IDs| CARDS
+    LLM -->|JSON: reply + citedProductIds| VERIFY
+    VERIFY -->|Descarta Alucinações & Sanitiza Preço| CARDS
     CARDS -->|Texto Fundamentado + Mini Cards Reais| CLIENT
 
     %% Estilos
@@ -190,11 +191,11 @@ sequenceDiagram
     participant GeminiGen as Gemini Flash (Sommelier)
     participant Grounding as Grounding Validator
 
-    Cliente->>API: POST /api/chat { message: "Quero tinto encorpado de 2018 para picanha até R$ 200" }
+    Cliente->>API: POST /api/chat { message: "Quero tinto encorpado de 2018 para picanha até R$ 200", history: [...] }
     
     rect rgb(20, 30, 45)
         Note over API,GeminiClass: Estágio 1: Sanitização e Decomposição (Deadline Parcial: 4s)
-        API->>API: Sanitiza entrada (escape de caracteres XML, max 500 chars)
+        API->>API: Sanitiza entrada e histórico (escape XML, truncate 4 turns, max 500 chars)
         API->>GeminiClass: Extrair Intenção + Filtros JSON
         GeminiClass-->>API: { semanticQuery: "tinto encorpado picanha", filters: { harvest: 2018, maxPrice: 200 }, editorial: true }
     end
@@ -202,7 +203,7 @@ sequenceDiagram
     rect rgb(25, 45, 35)
         Note over API,FTS: Estágio 2: Busca Híbrida Concorrente (Deadline Parcial: 4s)
         par Ramo Denso (taskType: RETRIEVAL_QUERY)
-            API->>GeminiClass: Embedding da semanticQuery
+            API->>GeminiClass: Embedding da semanticQuery (gemini-embedding-001)
             GeminiClass-->>API: Vetor 768d [0.031, -0.082, ...]
             API->>Chroma: collection.query({ queryEmbeddings, nResults: 8 })
             Chroma-->>API: Ranking Denso (Cosseno)
@@ -221,18 +222,18 @@ sequenceDiagram
 
     rect rgb(35, 20, 45)
         Note over API,GeminiGen: Estágio 4: Geração com Provas (Tempo Restante do Deadline de 18s)
-        API->>GeminiGen: Prompt Aumentado via systemInstruction + Evidências Verificadas
-        GeminiGen-->>API: Resposta conversacional citando produtos e evidências
+        API->>GeminiGen: Prompt Aumentado via systemInstruction + Evidências Verificadas + responseSchema
+        GeminiGen-->>API: JSON estruturado { reply: "Temos o Serra Malbec...", citedProductIds: ["c8d9..."] }
     end
 
     rect rgb(45, 20, 30)
         Note over API,Grounding: Estágio 5: Post-Generation Grounding Check & Card Assembly
-        API->>Grounding: Valida se produtos citados constavam em verified_catalog_evidence
-        Grounding-->>API: Produtos verificados aprovados (elimina IDs não autorizados)
+        API->>Grounding: Valida citedProductIds contra verified_catalog_evidence + Varredura Regex de Preços
+        Grounding-->>API: IDs válidos confirmados + Preços no texto reconciliados com PostgreSQL
         API->>API: Monta Mini Cards com dados 100% PostgreSQL (preço e estoque reais)
     end
 
-    API-->>Cliente: 200 OK { reply: "Temos o Serra Malbec 2018...", recommendedProducts: [...] }
+    API-->>Cliente: 200 OK { reply: "Para sua picanha...", recommendedProducts: [...] }
 ```
 
 ---
@@ -265,8 +266,9 @@ WHERE id = $productId;
 
 *Garantias de Compatibilidade:*
 1. **Não Aborta Pagamentos Concluídos:** O uso de `GREATEST(0, stock - $quantity)` impede que o estoque fique negativo e garante que falhas de estoque nunca revertam uma transação financeira já confirmada pelo gateway de pagamento (preservando o contrato de liquidação financeira de `spec07`).
-2. **Proteção contra Duplicidade:** O processamento ocorre estritamente dentro da transação protegida por deduplicação de eventos da `orderInboxEvents` ([spec08 §10](file:///c:/Users/Jo%C3%A3o%20Otavio%20Gamer/Desktop/Projetos%20Antigravity/Origem%20Vinhos/docs/specs/spec08-Pedidos.md#L224-L240)). Se o webhook do Mercado Pago for reenviado, o status `ALREADY_PAID` é retornado sem reexecutar o decremento.
+2. **Proteção contra Duplicidade:** O processamento ocorre estritamente dentro da transação protegida por deduplicação de eventos da `orderInboxEvents` ([spec08 §10](file:///c:/Users/João Otavio Gamer/Desktop/Projetos Antigravity/Origem Vinhos/docs/specs/spec08-Pedidos.md#L224-L240)). Se o webhook do Mercado Pago for reenviado, o status `ALREADY_PAID` é retornado sem reexecutar o decremento.
 3. **Reflexo Imediato no Sommelier:** Assim que o estoque chega a 0, o Funil da Verdade descarta o produto na mesma fração de segundo para novas consultas de chat.
+4. **Tratamento de Concorrência (Overselling):** Caso dois pedidos pagos simultaneamente disputem a última unidade em estoque (`stock` zerado por concorrência onde a quantidade demandada supera o saldo disponível), a transação financeira jamais é revertida (respeitando integralmente o fluxo transacional de `spec08`), mas o sistema emite obrigatoriamente um log estruturado de alerta (`WARN: STOCK_DEPLETED_CONCURRENTLY`) contendo `orderId` e `productId` para acionamento operacional imediato e tratativa proativa de reposição ou contato com o cliente pelo SAC.
 
 ---
 
@@ -360,8 +362,8 @@ sqliteDb.exec('PRAGMA busy_timeout = 5000;'); // Aguarda até 5s em caso de cont
 
 * **Nome da Coleção:** `origem_vinhos_catalog`
 * **Métrica de Distância:** `cosine` (distância angular independente do tamanho do chunk).
-* **Modelo de Embeddings Oficial:** `text-embedding-004` da Google Gemini API.
-* **Dimensões Reais:** Fixas em `768` números de ponto flutuante.
+* **Modelo de Embeddings Oficial:** `gemini-embedding-001` da Google Gemini API (configurado via parâmetro `outputDimensionality: 768` e parametrizável via variável de ambiente `GEMINI_EMBEDDING_MODEL`).
+* **Dimensões Reais:** Fixas em `768` números de ponto flutuante (via parâmetro de saída `outputDimensionality: 768`).
 * **Tipos de Tarefa Suportados:**
   * `taskType: "RETRIEVAL_DOCUMENT"` — Obrigatório para indexação de chunks no catálogo.
   * `taskType: "RETRIEVAL_QUERY"` — Obrigatório para vetorização de perguntas do usuário.
@@ -409,7 +411,7 @@ O Worker opera como processo isolado em `src/workers/catalog-ingestion.worker.ts
 Para cada produto ativo (`deleted_at IS NULL`), o Worker gera até 3 chunks semânticos, **rejeitando campos vazios**:
 
 1. **Chunk 1: `identidade` (Obrigatório / Base):**
-   * *Template:* `"${name} ${harvest} (${type}, uva ${grape}, ${country}, ${alcohol}% vol)"`
+   * *Template:* `"Vinho ${type} ${name}, safra ${harvest}, elaborado com a uva ${grape}, origem ${country}, teor alcoólico de ${alcohol}% vol."`
    * Se `harvest_notes` estiver preenchido e não vazio, anexa: `" — Ficha da safra: ${harvest_notes}"`.
 2. **Chunk 2: `sensorial` (Condicional):**
    * Gerado **apenas se** `sensory_profile` for não nulo e possuir caracteres válidos (`sensory_profile.trim().length > 0`).
@@ -422,7 +424,7 @@ Para cada produto ativo (`deleted_at IS NULL`), o Worker gera até 3 chunks sem�
 
 ### 7.3 Idempotência, Confirmação Dual de Índices e Prevenção de Órfãos
 
-Para garantir que o estado de um índice nunca mascare a falha do outro:
+Para garantir que o estado de um índice nunca mascare a falha do outro e evitar "buracos" de indisponibilidade durante as buscas:
 
 ```typescript
 // Lógica de Processamento e Sincronização Dual no Worker:
@@ -438,39 +440,47 @@ async function processProductEvent(event: OutboxEvent) {
 
   // 2. Cenário de Exclusão (Soft Delete ou Hard Delete)
   if (!product || product.deletedAt !== null) {
-    // Exclui de ambos os índices
-    await chromaCollection.delete({ ids: allPossibleChunkIds }).catch(() => null);
+    // Exclui de ambos os índices sem mascarar exceções do ChromaDB
+    await chromaCollection.delete({ ids: allPossibleChunkIds });
     sqliteDb.run(`DELETE FROM catalog_chunks_fts WHERE product_id = ?`, [event.productId]);
     sqliteDb.run(`INSERT OR REPLACE INTO indexed_versions (product_id, version) VALUES (?, ?)`, [event.productId, event.version]);
     await outboxRepo.markProcessed(event.id);
     return;
   }
 
-  // 3. Guarda de Versão Dual: Verifica se AMBOS os índices já estão atualizados
-  const sqliteVersionRow = sqliteDb.query(`SELECT version FROM indexed_versions WHERE product_id = ?`).get(product.id) as { version: number } | null;
-  const chromaRecord = await chromaCollection.get({ ids: [`${product.id}_identidade`] }).catch(() => null);
-  const chromaVersion = chromaRecord?.metadatas?.[0]?.version as number | undefined;
+  // 3. Gera Chunks válidos conforme atributos preenchidos
+  const activeChunks = generateSemanticChunks(product);
 
-  // Se ambos os índices já refletem a versão do produto (ou superior), o evento é redundante
-  if (sqliteVersionRow && sqliteVersionRow.version >= product.version && chromaVersion && chromaVersion >= product.version) {
+  // 4. Guarda de Versão Completa Dual:
+  // Consulta o SQLite e o ChromaDB para verificar consistência total e integridade de chunks
+  const sqliteVersionRow = sqliteDb.query(`SELECT version FROM indexed_versions WHERE product_id = ?`).get(product.id) as { version: number } | null;
+  const chromaRecords = await chromaCollection.get({ where: { productId: product.id } });
+
+  const isChromaCompleteAndSynced = 
+    Boolean(chromaRecords) && 
+    chromaRecords.ids.length === activeChunks.length &&
+    chromaRecords.metadatas?.every(m => (m?.version as number) >= product.version);
+
+  const isSqliteSynced = sqliteVersionRow && sqliteVersionRow.version >= product.version;
+
+  // Se ambos os índices já refletem a versão do produto e possuem todos os chunks ativos, o evento é redundante
+  if (isSqliteSynced && isChromaCompleteAndSynced) {
     console.log(`[Worker] Evento obsoleto/já sincronizado para produto ${product.id}. Versão: ${product.version}`);
     await outboxRepo.markProcessed(event.id);
     return;
   }
 
-  // 4. Gera Chunks válidos conforme atributos preenchidos
-  const activeChunks = generateSemanticChunks(product);
-
-  // 5. Prevenção Ativa de Chunks Órfãos:
-  // Remove preventivamente chunks antigos de ambos os índices
-  await chromaCollection.delete({ ids: allPossibleChunkIds }).catch(() => null);
-  sqliteDb.run(`DELETE FROM catalog_chunks_fts WHERE product_id = ?`, [product.id]);
-
-  // 6. Gera Embeddings via Gemini API com taskType explícito RETRIEVAL_DOCUMENT
+  // 5. Inversão de Ordem para Evitar "Buracos" na Busca:
+  // Calcula os embeddings na API do Gemini ANTES de remover os chunks antigos dos índices
   const embeddings = await geminiAdapter.generateEmbeddings({
     texts: activeChunks.map(c => c.text),
     taskType: 'RETRIEVAL_DOCUMENT'
   });
+
+  // 6. Prevenção Ativa de Chunks Órfãos e Atualização dos Índices:
+  // Remove preventivamente chunks antigos (sem suprimir erros via .catch) apenas após os vetores estarem prontos em memória
+  await chromaCollection.delete({ ids: allPossibleChunkIds });
+  sqliteDb.run(`DELETE FROM catalog_chunks_fts WHERE product_id = ?`, [product.id]);
 
   // 7. Gravação nos Dois Índices com Confirmação Obrigatória
   // Passo A: Grava no ChromaDB
@@ -515,10 +525,16 @@ async function processProductEvent(event: OutboxEvent) {
 }
 ```
 
+*Regras de Tratamento do Histórico de Conversa:*
+O campo `history` representa o histórico recente enviado pelo cliente e é tratado integralmente como **entrada não confiável (`untrusted input`)**:
+* Truncado obrigatoriamente às **últimas 4 mensagens (`max 4 turns`)** para proteger o orçamento de contexto e deadline global.
+* Validação estrita de papéis: aceita exclusivamente `role` pertencente ao conjunto `["user", "assistant"]` (descartando `system` ou papéis não autorizados).
+* Cada mensagem de histórico é limitada ao teto de **500 caracteres** e submetida ao mesmo escape rigoroso de caracteres XML aplicado à mensagem atual antes de ser interpolada no prompt.
+
 #### Payload de Resposta (`ChatResponseDTO`)
 ```json
 {
-  "reply": "Para acompanhar sua picanha, recomendo com entusiasmo o **Serra Malbec 2018**. Este rótulo apresenta corpo cheio e taninos firmes, casando perfeitamente com a suculência de carnes grelhadas. Sobre a safra: nossa ficha registra um verão seco com colheita manual em março, garantindo uma safra de guarda excepcional.",
+  "reply": "Para acompanhar sua picanha, recomendo com entusiasmo o **Serra Malbec 2018** (R$ 179,00). Este rótulo apresenta corpo cheio e taninos firmes, casando perfeitamente com a suculência de carnes grelhadas. Sobre a safra: nossa ficha registra um verão seco com colheita manual em março, garantindo uma safra de guarda excepcional.",
   "recommendedProducts": [
     {
       "id": "c8d9e2b1-4f1a-4d2b-9c3a-1e2f3a4b5c6d",
@@ -542,8 +558,14 @@ async function processProductEvent(event: OutboxEvent) {
 
 ### 8.2 Estágio 1: Sanitização e Decomposição Estruturada
 
-1. **Sanitização de Entrada:**
-   * A mensagem do cliente é limitada a **500 caracteres**. Caracteres que possam induzir injeção de markup (`<`, `>`, `&`, `"`, `'`) são convertidos para suas entidades seguras (`&lt;`, `&gt;`, `&amp;`, `&quot;`, `&#x27;`).
+1. **Sanitização de Entrada e Tratamento do Histórico:**
+   * A mensagem atual do cliente (`message`) é limitada a **500 caracteres**. Caracteres que possam induzir injeção de markup (`<`, `>`, `&`, `"`, `'`) são convertidos para suas entidades seguras (`&lt;`, `&gt;`, `&amp;`, `&quot;`, `&#x27;`).
+   * O array `history` é tratado estritamente como entrada não confiável (`untrusted input`):
+     - Truncado às **últimas 4 mensagens (`max 4 turns`)** mais recentes.
+     - Validação estrita de papéis: aceita apenas `role` em `["user", "assistant"]`.
+     - Cada mensagem do histórico é limitada ao teto de **500 caracteres**.
+     - Cada texto de mensagem histórica passa obrigatoriamente pelo mesmo escape de entidades XML (`<`, `>`, `&`, `"`, `'`) antes de sua interpolação na tag `<conversation_history>` do prompt final.
+
 2. **Decomposição Estruturada:**
    A mensagem sanitizada é submetida ao `gemini-2.5-flash` com *Structured Outputs* (JSON Schema estrito, timeout parcial de 4s vinculado ao deadline global):
 
@@ -568,7 +590,7 @@ async function processProductEvent(event: OutboxEvent) {
 O orquestrador dispara em paralelo (`Promise.all` com timeout parcial de 4s vinculado ao deadline global):
 
 1. **Ramo Denso (ChromaDB):**
-   * Gera embedding da `semanticQuery` via Gemini com `taskType: "RETRIEVAL_QUERY"`.
+   * Gera embedding da `semanticQuery` via Gemini (`gemini-embedding-001`, 768 dimensões) com `taskType: "RETRIEVAL_QUERY"`.
    * Consulta a coleção do ChromaDB solicitando os 8 chunks mais próximos por ângulo de cosseno.
 2. **Ramo Lexical (SQLite FTS5):**
    * Remove stopwords em português e pontuação da `semanticQuery`.
@@ -627,7 +649,29 @@ DIRETRIZES DE SEGURANÇA E FACTUALIDADE (IMUTÁVEIS):
 4. REGRA DA FONTE OU SILÊNCIO: Use APENAS e EXCLUSIVAMENTE os dados listados em <verified_catalog_evidence>.
 5. NUNCA invente notas de safra, clima, solo ou características sensoriais que não estejam explicitamente documentadas nas evidências.
 6. Se o cliente perguntar sobre a safra de um vinho e o campo 'harvest_notes' estiver vazio nas evidências, responda obrigatoriamente: "Não possuímos registro editorial documentado sobre esta safra específica."
-7. NUNCA cite valores monetários ou quantidades de estoque divergentes das evidências fornecidas. A interface do usuário exibirá os cards oficiais com preços e estoques validados pelo sistema.
+7. PREÇOS E DISPONIBILIDADE: Você PODE informar preços e disponibilidade em estoque quando questionado pelo cliente ou ao recomendar um rótulo, mas deve exigir ESTRITA FIDELIDADE ao campo <price_brl> e <current_stock> presentes nas evidências. NUNCA cite valores monetários ou estoques divergentes das evidências fornecidas. A interface do usuário exibirá os Mini Cards oficiais sincronizados com esses valores.
+```
+
+#### Resposta Estruturada via `responseSchema`:
+Para eliminar a dependência de parsings frágeis de nomes no texto ou expressões regulares imprecisas, a geração final do Sommelier utiliza o parâmetro nativo `responseSchema` do Gemini, retornando estritamente um JSON estruturado:
+
+```typescript
+// Schema estruturado obrigatório da geração do Sommelier:
+const sommelierResponseSchema = {
+  type: "OBJECT",
+  properties: {
+    reply: { 
+      type: "STRING", 
+      description: "Resposta conversacional do Sommelier em linguagem natural elegante." 
+    },
+    citedProductIds: { 
+      type: "ARRAY", 
+      items: { type: "STRING" },
+      description: "Lista de UUIDs dos produtos das evidências explicitamente recomendados ou citados no texto."
+    }
+  },
+  required: ["reply", "citedProductIds"]
+};
 ```
 
 #### Corpo da Mensagem (`contents`):
@@ -647,7 +691,7 @@ DIRETRIZES DE SEGURANÇA E FACTUALIDADE (IMUTÁVEIS):
 </verified_catalog_evidence>
 
 <conversation_history>
-  <!-- Últimas 4 mensagens para contexto de diálogo -->
+  <!-- Últimas 4 mensagens sanitizadas (role user/assistant, max 500 chars cada, com escape XML) -->
 </conversation_history>
 
 <user_query>
@@ -659,13 +703,20 @@ ${sanitizedUserMessage}
 
 ### 8.6 Estágio 5: Post-Generation Grounding Check e Soberania dos Mini Cards
 
-Para garantir que o cliente **nunca seja enganado por valores inventados pelo LLM**:
+Para garantir que o cliente **nunca seja enganado por valores inventados pelo LLM e que o texto e a interface visual jamais entrem em contradição**:
 
-1. **Auditoria de IDs:**
-   O backend inspeciona o texto gerado. Se o LLM alucinar a menção de um produto fictício ou de um rótulo que não estava presente nas evidências verificadas, esse produto é descartado do array `recommendedProducts`.
-2. **Soberania dos Mini Cards (Dados 100% PostgreSQL):**
-   Os Mini Cards interativos exibidos na interface **não utilizam nenhum dado numérico ou cadastral extraído do texto do LLM**. Eles são instanciados diretamente a partir dos dados do snapshot do PostgreSQL verificado no Estágio 3 (`price`, `stock`, `harvest`, `image`, `name`).
-   - Se o LLM por engano escrever *"este vinho custa R$ 50"*, o Mini Card oficial abaixo exibirá soberanamente **R$ 179,00** e o botão de compra adicionará o vinho pelo preço real do banco relacional.
+1. **Auditoria Determinística de IDs (`citedProductIds`):**
+   O validador inspeciona a lista `citedProductIds` retornada pelo JSON estruturado do Gemini. O sistema verifica se todos os IDs pertencem à lista de evidências aprovadas pelo Funil da Verdade no PostgreSQL. Qualquer ID que não conste nas evidências verificadas é sumariamente expurgado, impedindo a montagem de Mini Cards para produtos não autorizados ou alucinados.
+
+2. **Auditoria Determinística de Valores Monetários no Texto:**
+   Para além de filtrar os IDs, o validador executa uma verificação por Regex sobre a string `reply` capturando menções a valores monetários em moeda nacional (`/R\$\s?\d+([.,]\d{2})?/gi`):
+   * O validador compara cada valor monetário detectado no texto com os preços reais (`price`) dos produtos verificados no PostgreSQL presentes nas evidências (e também com o filtro de teto orçamentário `maxPrice` citado pelo próprio usuário).
+   * Se o texto contiver um valor monetário que **não corresponda** a nenhum dos preços oficiais do PostgreSQL nem ao `maxPrice` do cliente, o Grounding Check intercepta a divergência como violação de ancoragem.
+   * O validador substitui/sanitiza o trecho divergente no texto com o preço oficial do PostgreSQL do produto referenciado e incrementa a métrica `groundingViolationsDropped` no log estruturado de auditoria. Isso assegura que o texto do Sommelier e o Mini Card jamais entrem em contradição numérica.
+
+3. **Soberania Comercial dos Mini Cards (Dados 100% PostgreSQL):**
+   Os Mini Cards interativos exibidos na interface **não utilizam nenhum dado numérico ou cadastral extraído do texto do LLM**. Eles são instanciados diretamente a partir dos dados do snapshot do PostgreSQL verificado no Estágio 3 (`price`, `stock`, `harvest`, `image`, `name`, `id`).
+   * Se o LLM alucinar no texto *"este vinho custa R$ 50,00"*, o Grounding Check intercepta e corrige o valor no texto para **R$ 179,00**, e o Mini Card oficial exibirá soberanamente **R$ 179,00**, com o botão de compra adicionando o vinho ao carrinho estritamente pelo valor do banco de dados relacional.
 
 ---
 
@@ -783,15 +834,15 @@ O comando `bun run rag:reconcile` executa auditoria comparando simultaneamente o
 flowchart TD
     START["Comando bun run rag:reconcile<br><i>(Auditoria Periódica de 3 Vias)</i>"]
     FETCH_PG["1. Lê PostgreSQL<br>SELECT id, version, deleted_at FROM products;"]
-    FETCH_CHROMA["2. Lê ChromaDB<br>collection.get(metadatas: version)"]
+    FETCH_CHROMA["2. Lê ChromaDB<br>collection.get(metadatas: [productId, version])"]
     FETCH_SQLITE["3. Lê SQLite<br>SELECT product_id, version FROM indexed_versions;"]
     
     COMPARE["Comparador Diferencial em Memória"]
     
     D1["Caso 1: postgres.version > chroma.version OU postgres.version > sqlite.version<br><i>(Divergência de versão / Atualização pendente)</i>"]
-    D2["Caso 2: Produto existe no Chroma/SQLite mas deleted_at IS NOT NULL no Postgres<br><i>(Registro órfão pendente de deleção)</i>"]
+    D2["Caso 2: Produto ausente no Postgres (Hard Delete) OU deleted_at IS NOT NULL (Soft Delete) OU chunks excedentes<br><i>(Registro órfão pendente de limpeza)</i>"]
     D3["Caso 3: Produto ausente em um dos índices<br><i>(Falha parcial de gravação anterior)</i>"]
-    D4["Caso 4: Versões idênticas em Postgres, ChromaDB e SQLite<br><i>(100% consistente)</i>"]
+    D4["Caso 4: Versões e quantidades de chunks idênticas em Postgres, ChromaDB e SQLite<br><i>(100% consistente)</i>"]
 
     SYNC["Gera Chunks + Embeddings RETRIEVAL_DOCUMENT<br>Upsert sincronizado no ChromaDB e SQLite FTS5"]
     CLEAN["Deleta chunks do ChromaDB<br>Deleta chunks do SQLite FTS5"]
@@ -815,9 +866,22 @@ flowchart TD
     class OK proc;
 ```
 
+*Classificação de Casos de Reconciliação:*
+- **Caso 1 (Atualização Pendente):** `postgres.version > chroma.version` OU `postgres.version > sqlite.version` $\rightarrow$ O reconciliador gera os novos chunks, calcula os vetores e atualiza ambos os índices.
+- **Caso 2 (Limpeza de Órfãos / Soft e Hard Delete):** Produto existe no ChromaDB ou SQLite, mas NÃO existe na tabela `products` do PostgreSQL (Hard Delete) OU possui `deleted_at IS NOT NULL` (Soft Delete), ou possui chunks excedentes que não deveriam mais existir $\rightarrow$ O reconciliador executa `CLEAN`, deletando os chunks órfãos de ambos os índices.
+- **Caso 3 (Falha Parcial Anterior):** Chunks presentes no SQLite FTS5 mas ausentes no ChromaDB (ou vice-versa) $\rightarrow$ O reconciliador executa `SYNC`, regenerando os chunks e restabelecendo a consistência dual.
+- **Caso 4 (Consistência Plena):** Versões e quantidades de chunks idênticas nos três armazenamentos $\rightarrow$ Nenhuma ação é necessária (zero chamadas à API Gemini).
+
 *Classificação de Falhas na Reconciliação:*
 - **Falhas Transitórias:** Timeout de rede com o ChromaDB durante o sync $\rightarrow$ O reconciliador registra aviso em log e reagenda para o próximo ciclo sem quebrar o banco.
-- **Falhas Estruturais:** Corrupção do arquivo SQLite FTS5 $\rightarrow$ O reconciliador exclui o arquivo corrompido, recria a tabela virtual e reindexa o catálogo completo a partir do PostgreSQL.
+- **Falhas Estruturais:** Corrupção ou inconsistência estrutural no SQLite FTS5 $\rightarrow$ O reconciliador **não deve tentar excluir o arquivo físico em disco** (ação que causaria erro `EBUSY` / conflito de lock de descritores de arquivo enquanto o servidor HTTP estiver ativo e conectado em modo WAL). Em vez disso, o reconciliador executa a **reconstrução segura *in-place* dentro da própria conexão SQLite**:
+  ```sql
+  DROP TABLE IF EXISTS catalog_chunks_fts;
+  DROP TABLE IF EXISTS indexed_versions;
+  -- Recria as tabelas virtuais e tabelas de versão
+  PRAGMA wal_checkpoint(TRUNCATE);
+  ```
+  Em seguida, recria as tabelas virtuais e reindexa o catálogo completo a partir do PostgreSQL com garantia de consistência.
 
 ---
 
@@ -866,9 +930,9 @@ Todas as transações do chat emitem um log estruturado em stdout/arquivo:
 ### Cenário 1: Ingestão Atômica com Guarda de Versão Dual
 ```gherkin
 Given que o produto "Serra Malbec" existe no PostgreSQL com version = 2
-And que o SQLite FTS5 possui version = 2 e o ChromaDB possui version = 2
+And que o SQLite FTS5 possui version = 2 e o ChromaDB possui version = 2 com todos os chunks ativos
 When o Worker consome um evento atrasado com version = 1 referente a esse produto
-Then o Worker deve constatar que ambos os índices já refletem versão superior
+Then o Worker deve constatar que ambos os índices já refletem versão superior e íntegra
 And deve abortar a regravação nos índices
 And deve marcar o evento como processado sem regredir o estado do catálogo
 ```
@@ -937,11 +1001,14 @@ And se um Worker travar durante o processamento, após 5 minutos a trava deve ex
 And outro Worker deve poder reprocessar o evento com segurança
 ```
 
-### Cenário 9: Soberania Comercial dos Mini Cards contra Alucinações de Preço
+### Cenário 9: Soberania Comercial dos Mini Cards e Intercepção de Preço Alucinado
 ```gherkin
-Given que o Funil da Verdade aprovou o produto "Serra Malbec" com preço real de R$ 179,00
-When o LLM por engano redigir no texto conversacional "este rótulo sai por apenas R$ 50,00"
-Then o backend deve montar o Mini Card interativo utilizando estritamente o valor de R$ 179,00 do PostgreSQL
+Given que o Funil da Verdade aprovou o produto "Serra Malbec" com preço real de R$ 179,00 no PostgreSQL
+When o LLM alucinar no texto conversacional "este rótulo sai por apenas R$ 50,00"
+Then o Post-Generation Grounding Check deve detectar a discrepância monetária via Regex contra o snapshot do PostgreSQL
+And deve substituir/corrigir o valor divergente no texto para o preço oficial de R$ 179,00 antes de enviá-lo ao cliente
+And deve incrementar a métrica groundingViolationsDropped no log de observabilidade
+And o backend deve montar o Mini Card interativo utilizando soberanamente o valor de R$ 179,00 do PostgreSQL
 And o botão "+ Adicionar ao Carrinho" deve adicionar o produto pelo preço real de R$ 179,00
 ```
 
@@ -968,6 +1035,18 @@ Given que a chamada à API Gemini excede o tempo limite e o deadline global atin
 When o AbortSignal é disparado pelo orquestrador
 Then todas as conexões assíncronas pendentes devem ser abortadas imediatamente
 And o cliente deve receber uma resposta amigável informando a expiração do tempo limite
+```
+
+### Cenário 13: Preservação do Índice em Caso de Falha na API de Embeddings durante Atualização
+```gherkin
+Given que o produto "Serra Malbec" possui chunks indexados na versão 1 no ChromaDB e SQLite FTS5
+When o Administrador atualiza os atributos do produto gerando a versão 2
+And o Worker consome o evento e tenta gerar os embeddings na API do Gemini
+But a chamada à API Gemini falha por timeout ou indisponibilidade transitória (ex: HTTP 503)
+Then os chunks da versão 1 existentes no ChromaDB e no SQLite FTS5 não devem ser apagados prematuramente
+And ambos os índices devem continuar atendendo consultas de busca com os dados da versão 1
+And a transação do Worker deve lançar erro abortando o processamento
+And o evento deve permanecer na tabela catalog_outbox para retentativa posterior com retry_count incrementado
 ```
 
 ---
@@ -1010,11 +1089,11 @@ src/
 | :--- | :--- | :--- |
 | `src/infra/schema.ts` | Modificação | Adicionar colunas `stock`, `sensory_profile`, `pairing`, `harvest_notes`, `version` em `products`; declarar tabela `catalog_outbox`. |
 | `docker-compose.yml` | Modificação | Declarar serviço oficial `chromadb` (`chromadb/chroma:latest`) na porta 8000 com volume persistente. |
-| `src/workers/catalog-ingestion.worker.ts` | Criação | Processo autônomo do Worker de ingestão com drain loop, version guard e sincronização dual. |
+| `src/workers/catalog-ingestion.worker.ts` | Criação | Processo autônomo do Worker de ingestão com drain loop, version guard e sincronização dual sem buracos na busca. |
 | `src/domains/catalog/adapters/bun-sqlite-fts.adapter.ts` | Criação | Adaptador de persistência e busca BM25 com prefixos operando via `bun:sqlite` sobre `./data/rag_lexical.db`. |
 | `src/domains/catalog/adapters/chroma-vector-store.adapter.ts` | Criação | Adaptador HTTP oficial para operações de upsert, query e delete na coleção do ChromaDB. |
-| `src/domains/catalog/adapters/gemini-ai.adapter.ts` | Criação | Adaptador da API Google Gemini para embeddings (`text-embedding-004`) e LLM (`gemini-2.5-flash`). |
-| `src/domains/catalog/use-cases/chat-orchestrator.use-case.ts` | Criação | Caso de uso principal: orquestra decomposição, busca híbrida, RRF, funil Postgres, grounding check e montagem soberana de cards. |
+| `src/domains/catalog/adapters/gemini-ai.adapter.ts` | Criação | Adaptador da API Google Gemini para embeddings (`gemini-embedding-001` com `outputDimensionality: 768`) e LLM (`gemini-2.5-flash`). |
+| `src/domains/catalog/use-cases/chat-orchestrator.use-case.ts` | Criação | Caso de uso principal: orquestra decomposição, busca híbrida, RRF, funil Postgres, grounding check (IDs + Regex de preços) e montagem soberana de cards. |
 | `src/domains/catalog/catalog.handlers.ts` | Modificação | Expor o endpoint `POST /api/chat` integrado ao servidor Bun sob deadline global de 18s. |
 | `src/web/components/ChatDrawer.tsx` | Criação | Componente React do Floating Chat Drawer inspirado no Crisp com Mini Wine Cards integrados. |
 | `src/web/App.tsx` | Modificação | Instanciar o `ChatDrawer` globalmente sobre a vitrine do e-commerce. |
@@ -1024,4 +1103,4 @@ src/
 
 ## 14. Conclusão
 
-Esta especificação transforma a visão conceitual do RAG em um projeto de engenharia de software **robusto, verificável e pronto para execução**. A solução respeita a soberania do PostgreSQL, ancora respostas em dados verificados, separa os canais comerciais (garantindo que preços e estoques dos Mini Cards venham exclusivamente do banco relacional), implementa busca híbrida matematicamente fiel (Cosseno + BM25 via SQLite FTS5) e entrega uma interface comercial de conversão premium.
+Esta especificação transforma a visão conceitual do RAG em um projeto de engenharia de software **robusto, verificável e pronto para execução**. A solução respeita a soberania do PostgreSQL, ancora respostas em dados verificados, separa os canais comerciais (garantindo que preços e estoques dos Mini Cards venham exclusivamente do banco relacional), blinda o sistema contra discrepâncias monetárias via auditoria determinística pós-geração, implementa busca híbrida matematicamente fiel (Cosseno + BM25 via SQLite FTS5) e entrega uma interface comercial de conversão premium.
