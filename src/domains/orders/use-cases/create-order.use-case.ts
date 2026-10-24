@@ -1,5 +1,10 @@
 import { Order } from '../domain/order.entity';
 import type { OrderRepositoryPort, OrderItemSnapshot } from '../ports/order-repository.port';
+import type {
+  CartRepositoryPort,
+  CatalogRepositoryPort,
+  AddressRepositoryPort,
+} from '../ports/order-external-dependencies.port';
 import { parseNumericPriceToCents } from '../utils/money.utils';
 
 export interface CreateOrderInput {
@@ -14,18 +19,20 @@ export interface CreateOrderOutput {
   items: OrderItemSnapshot[];
 }
 
+export interface CreateOrderDependencies {
+  orderRepository: OrderRepositoryPort;
+  cartRepository: CartRepositoryPort;
+  catalogRepository: CatalogRepositoryPort;
+  addressRepository: AddressRepositoryPort;
+}
+
 export class CreateOrderUseCase {
   private orderRepo: OrderRepositoryPort;
-  private cartRepo: any;
-  private catalogRepo: any;
-  private addressRepo: any;
+  private cartRepo: CartRepositoryPort;
+  private catalogRepo: CatalogRepositoryPort;
+  private addressRepo: AddressRepositoryPort;
 
-  constructor(dependencies: {
-    orderRepository: OrderRepositoryPort;
-    cartRepository: any;
-    catalogRepository: any;
-    addressRepository: any;
-  }) {
+  constructor(dependencies: CreateOrderDependencies) {
     this.orderRepo = dependencies.orderRepository;
     this.cartRepo = dependencies.cartRepository;
     this.catalogRepo = dependencies.catalogRepository;
@@ -97,7 +104,7 @@ export class CreateOrderUseCase {
           productImage: product.image,
           productType: product.type,
           productGrape: product.grape,
-          productHarvest: product.harvest,
+          productHarvest: Number(product.harvest),
           unitPriceCents,
           quantity: cartItem.quantity,
           subtotalCents,

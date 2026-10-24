@@ -1,13 +1,18 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
 import { CreateOrderUseCase } from '../../src/domains/orders/use-cases/create-order.use-case';
 import type { OrderRepositoryPort } from '../../src/domains/orders/ports/order-repository.port';
+import type {
+  CartRepositoryPort,
+  CatalogRepositoryPort,
+  AddressRepositoryPort,
+} from '../../src/domains/orders/ports/order-external-dependencies.port';
 import { Order } from '../../src/domains/orders/domain/order.entity';
 
 describe('CreateOrderUseCase', () => {
   let mockOrderRepo: OrderRepositoryPort;
-  let mockCartRepo: any;
-  let mockCatalogRepo: any;
-  let mockAddressRepo: any;
+  let mockCartRepo: CartRepositoryPort;
+  let mockCatalogRepo: CatalogRepositoryPort;
+  let mockAddressRepo: AddressRepositoryPort;
 
   beforeEach(() => {
     mockOrderRepo = {
@@ -113,6 +118,12 @@ describe('CreateOrderUseCase', () => {
   it('should reject when product was soft-deleted in catalog', async () => {
     mockCatalogRepo.findById = async () => ({
       id: 'prod-1',
+      name: 'Vinho Tinto Reserva',
+      price: '120.50',
+      image: 'vinho.png',
+      type: 'Tinto',
+      grape: 'Cabernet',
+      harvest: 2021,
       deletedAt: new Date(),
     });
 
