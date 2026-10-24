@@ -6,6 +6,7 @@ import { AddressHandlers } from './domains/address/address.handlers';
 import { FavoritesHandlers } from './domains/favorites/favorites.handlers';
 import { OrdersHandlers } from './domains/orders/orders.handlers';
 import { PaymentHandlers } from './domains/payment/payment.handlers';
+import { startCatalogIngestionWorker } from './workers/catalog-ingestion.worker';
 
 const identityHandlers = new IdentityHandlers();
 const catalogHandlers = new CatalogHandlers();
@@ -220,5 +221,11 @@ const server = Bun.serve({
 });
 
 console.log(`Adega virtual rodando em: http://localhost:${server.port}`);
+
+if (process.env.NODE_ENV !== 'test') {
+  startCatalogIngestionWorker().catch((err) => {
+    console.error('[Worker] Falha ao iniciar worker de ingestão do catálogo:', err);
+  });
+}
 
 export default server;
